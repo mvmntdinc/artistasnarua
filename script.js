@@ -521,6 +521,8 @@ let cfg = {
   eng: 3, reels: 15, spotify: 500, freq: 2, segmin: 0, segmax: 50,
 };
 
+let abaAtiva = 'todos'; // 'todos' ou 'filtrados'
+
 
 /* ── CHECKLIST DE DUE DILIGENCE ─────────────────────────────── */
 
@@ -662,7 +664,7 @@ function calcScore(a) {
   else if (a.eng >= 2.5) s += 12;
 
   // Reels reach por 1K seguidores (25pts)
-  const rp = a.reels / (a.seg / 1000);
+  const rp = a.seg > 0 ? a.reels / (a.seg / 1000) : 0;
   if      (rp >= 3)   s += 25;
   else if (rp >= 1.5) s += 15;
   else                s += 5;
@@ -738,6 +740,18 @@ function buildRing(sc, t) {
         fill="${color}">${sc}</text>
     </svg>`;
 }
+
+
+/* ── ABAS ───────────────────────────────────────────────────── */
+
+function setTab(aba) {
+  abaAtiva = aba;
+  document.getElementById('tab-todos').classList.toggle('active',     aba === 'todos');
+  document.getElementById('tab-filtrados').classList.toggle('active', aba === 'filtrados');
+  render();
+}
+
+window.setTab = setTab;
 
 
 /* ── FILTROS ────────────────────────────────────────────────── */
@@ -832,15 +846,19 @@ function render() {
     ...a, sc: calcScore(a), tier: tier(calcScore(a)),
   }));
 
-  const filtered = scored.filter(a =>
-    a.eng    >= cfg.eng &&
-    (a.reels / (a.seg / 1000)) >= (cfg.reels / 10) &&
-    a.spotify >= cfg.spotify &&
-    a.freq   >= cfg.freq &&
-    a.seg    >= cfg.segmin * 1000 &&
-    a.seg    <= cfg.segmax * 1000 &&
-    (!excComp || !a.comp)
-  );
+  // "Todos" mostra tudo, sem filtro — só ordena por score
+  // "Filtrados" aplica todos os filtros da sidebar
+  const filtered = abaAtiva === 'todos'
+    ? scored
+    : scored.filter(a =>
+        a.eng    >= cfg.eng &&
+        (a.seg > 0 ? (a.reels / (a.seg / 1000)) : 0) >= (cfg.reels / 10) &&
+        a.spotify >= cfg.spotify &&
+        a.freq   >= cfg.freq &&
+        a.seg    >= cfg.segmin * 1000 &&
+        a.seg    <= cfg.segmax * 1000 &&
+        (!excComp || !a.comp)
+      );
 
   const ideais = filtered.filter(a => a.tier === 'ideal').length;
   const oks    = filtered.filter(a => a.tier === 'ok').length;
@@ -921,7 +939,7 @@ function buildCard(a) {
     goods.push('✓ Fã real');
 
   const eB = Math.min(100, Math.round(a.eng / 15 * 100));
-  const rB = Math.min(100, Math.round((a.reels / (a.seg / 1000)) / 5 * 100));
+  const rB = Math.min(100, Math.round((a.seg > 0 ? a.reels / (a.seg / 1000) : 0) / 5 * 100));
   const sB = Math.min(100, Math.round(a.spotify / 10000 * 100));
   const fB = Math.min(100, Math.round(a.freq / 7 * 100));
 
