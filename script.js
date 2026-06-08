@@ -156,9 +156,16 @@ async function handleSpotifyCallback() {
   showToast('✓ Spotify conectado!');
 }
 
-/** Retorna token válido ou inicia autenticação. */
+/** Retorna token válido ou força re-autenticação com aviso claro. */
 async function getSpotifyToken() {
   if (spotifyToken && Date.now() < spotifyTokenExp) return spotifyToken;
+  // Token expirado — limpa e pede novo login
+  localStorage.removeItem('sp_token');
+  localStorage.removeItem('sp_exp');
+  spotifyToken    = null;
+  spotifyTokenExp = 0;
+  showToast('🔄 Sessão expirada — reconectando ao Spotify...', 2000);
+  await new Promise(r => setTimeout(r, 1500)); // mostra o toast antes de redirecionar
   await startSpotifyAuth();
   return null;
 }
@@ -178,18 +185,22 @@ async function searchSpotifyArtist(query) {
 
 /**
  * Busca as top tracks de um artista no BR.
+ * Retorna array vazio se falhar (não quebra o fluxo).
  */
 async function getTopTracks(artistId) {
-  const token = await getSpotifyToken();
-  const url   = `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=BR`;
-  const res   = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  const data  = await res.json();
-  return (data.tracks || []).slice(0, 5).map(t => ({
-    nome:         t.name,
-    popularidade: t.popularity,
-    preview:      t.preview_url,
-    album:        t.album?.name,
-  }));
+  try {
+    const token = await getSpotifyToken();
+    const url   = `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=BR`;
+    const res   = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) return []; // 403 ou outro erro — ignora silenciosamente
+    const data  = await res.json();
+    return (data.tracks || []).slice(0, 5).map(t => ({
+      nome:         t.name,
+      popularidade: t.popularity,
+      preview:      t.preview_url,
+      album:        t.album?.name,
+    }));
+  } catch { return []; }
 }
 
 /**
