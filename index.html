@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NARUA Artist Finder — MVMNTD INC</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════
+       HEADER
+  ═══════════════════════════════════════════════════════ -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">M</div>
+      <div>
+        <div class="logo-name">MVMNTD INC</div>
+        <div class="logo-sub">NARUA · Artist Finder</div>
+      </div>
+    </div>
+    <div class="header-tag">Rio de Janeiro · 2026</div>
+  </header>
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       HERO
+  ═══════════════════════════════════════════════════════ -->
+  <div class="hero">
+    <div class="hero-tag">Ferramenta de prospecção</div>
+    <h1 class="hero-title">
+      Encontre o artista<br>
+      <em>ideal para o NARUA</em>
+    </h1>
+    <p class="hero-sub">
+      Cadastre artistas, ajuste os filtros e veja quem tem o perfil certo
+      para colaborar com o MVMNTD INC. Score calculado em tempo real.
+    </p>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       CONTAINER PRINCIPAL
+  ═══════════════════════════════════════════════════════ -->
+  <div class="container">
+
+    <!-- Summary strip (preenchida via JS) -->
+    <div class="summary-strip" id="summary"></div>
+
+    <!-- Ideal profile banner (preenchido via JS) -->
+    <div class="ideal-banner" id="ideal-banner"></div>
+
+    <!-- ── AÇÕES DE DADOS ─────────────────────────────────── -->
+    <div class="data-actions">
+      <button class="btn-outline" onclick="exportJSON()" title="Baixar lista como arquivo JSON">
+        ↓ Exportar lista
+      </button>
+      <button class="btn-outline secondary" onclick="importJSON()" title="Carregar lista de um arquivo JSON">
+        ↑ Importar lista
+      </button>
+    </div>
+
+
+    <!-- ── FORMULÁRIO DE CADASTRO ─────────────────────────── -->
+    <div class="add-block">
+
+      <div class="add-header" onclick="toggleForm()">
+        <div class="add-header-left">
+          <div class="add-icon">+</div>
+          Cadastrar novo artista
+        </div>
+        <span class="add-chevron open" id="form-chevron">▲</span>
+      </div>
+
+      <div class="add-body" id="form-body">
+
+        <!-- Busca Spotify -->
+        <div class="spotify-search-row">
+          <div class="fg" style="flex:1">
+            <label>Nome / @ do artista</label>
+            <input type="text" id="f-nome" placeholder="MC Exemplo — digita e clica em Buscar"/>
+          </div>
+          <button id="btn-spotify" class="btn-spotify" onclick="fetchSpotify()">
+            🔍 Buscar no Spotify
+          </button>
+        </div>
+
+        <!-- Preview Spotify (preenchido via JS) -->
+        <div id="spotify-preview" class="spotify-preview"></div>
+
+        <!-- Campos ocultos preenchidos pelo Spotify -->
+        <input type="hidden" id="f-spot-id"/>
+        <input type="hidden" id="f-seg-spot"/>
+        <input type="hidden" id="f-pop"/>
+
+        <div class="form-grid">
+          <div class="fg">
+            <label>Seguidores Instagram</label>
+            <input type="number" id="f-seg" placeholder="12000" min="0"/>
+          </div>
+          <div class="fg">
+            <label>Engajamento %</label>
+            <input type="number" id="f-eng" placeholder="4.5" min="0" max="100" step="0.1"/>
+          </div>
+          <div class="fg">
+            <label>Reels views % (por 1K seg)</label>
+            <input type="number" id="f-reels" placeholder="20" min="0"/>
+          </div>
+          <div class="fg">
+            <label>Ouvintes Spotify/mês</label>
+            <input type="number" id="f-spotify" placeholder="1500" min="0"/>
+          </div>
+          <div class="fg">
+            <label>Posts por semana</label>
+            <input type="number" id="f-freq" placeholder="3" min="0" max="21"/>
+          </div>
+          <div class="fg">
+            <label>TikTok — Seguidores</label>
+            <input type="number" id="f-tiktok" placeholder="3500" min="0"/>
+          </div>
+          <div class="fg">
+            <label>Nicho</label>
+            <select id="f-niche">
+              <option value="funk">Funk</option>
+              <option value="trap">Trap</option>
+              <option value="rap">Rap / BoomBap</option>
+              <option value="rb">R&amp;B</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="check-rows">
+          <label class="chk-label">
+            <input type="checkbox" id="f-comp"/>
+            Suspeita de audiência comprada
+          </label>
+          <label class="chk-label">
+            <input type="checkbox" id="f-colab"/>
+            Já colaborou com selos antes
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-primary" onclick="addArtist()">Cadastrar Artista</button>
+          <button class="btn-ghost"   onclick="clearAll()">Limpar todos</button>
+        </div>
+      </div>
+
+    </div><!-- /.add-block -->
+
+
+    <!-- ── LAYOUT: SIDEBAR + GRID ─────────────────────────── -->
+    <div class="layout">
+
+      <!-- ── SIDEBAR DE FILTROS ──────────────────────────── -->
+      <aside class="sidebar">
+
+        <!-- Filtros numéricos -->
+        <div class="sidebar-section">
+          <div class="s-title">Filtros</div>
+
+          <div class="filter-item">
+            <div class="filter-head">
+              <span class="filter-name">Engajamento mínimo</span>
+              <span class="filter-val" id="lbl-eng">3%</span>
+            </div>
+            <input type="range" min="1" max="15" step="0.5" value="3"
+              oninput="sf('eng', this.value, '%')">
+          </div>
+
+          <div class="filter-item">
+            <div class="filter-head">
+              <span class="filter-name">Reels views mínimo</span>
+              <span class="filter-val" id="lbl-reels">15%</span>
+            </div>
+            <input type="range" min="5" max="80" step="5" value="15"
+              oninput="sf('reels', this.value, '%')">
+          </div>
+
+          <div class="filter-item">
+            <div class="filter-head">
+              <span class="filter-name">Ouvintes Spotify mín.</span>
+              <span class="filter-val" id="lbl-spotify">500</span>
+            </div>
+            <input type="range" min="0" max="15000" step="100" value="500"
+              oninput="sfSpot(this.value)">
+          </div>
+
+          <div class="filter-item">
+            <div class="filter-head">
+              <span class="filter-name">Posts/semana mínimo</span>
+              <span class="filter-val" id="lbl-freq">2x</span>
+            </div>
+            <input type="range" min="1" max="7" step="1" value="2"
+              oninput="sf('freq', this.value, 'x')">
+          </div>
+
+          <div class="filter-item">
+            <div class="filter-head">
+              <span class="filter-name">Seguidores mín.</span>
+              <span class="filter-val" id="lbl-segmin">5K</span>
+            </div>
+            <input type="range" min="1" max="30" step="1" value="5"
+              oninput="sf('segmin', this.value, 'K')">
+          </div>
+
+          <div class="filter-item">
+            <div class="filter-head">
+              <span class="filter-name">Seguidores máx.</span>
+              <span class="filter-val" id="lbl-segmax">50K</span>
+            </div>
+            <input type="range" min="10" max="200" step="5" value="50"
+              oninput="sf('segmax', this.value, 'K')">
+          </div>
+        </div>
+
+        <hr class="sep"/>
+
+        <!-- Toggle: excluir audiência comprada -->
+        <div class="sidebar-section">
+          <div class="s-title">Regras</div>
+          <div class="toggle-row">
+            <span class="toggle-name">Excluir audiência comprada</span>
+            <label class="tog">
+              <input type="checkbox" id="tgl-comp" checked onchange="render()">
+              <span class="tog-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <hr class="sep"/>
+
+        <!-- Legenda de tiers -->
+        <div class="sidebar-section">
+          <div class="s-title">Legenda</div>
+          <div class="legend-item">
+            <div class="leg-dot" style="background:var(--green)"></div>
+            Ideal — 65+ pontos
+          </div>
+          <div class="legend-item">
+            <div class="leg-dot" style="background:var(--amber)"></div>
+            Aceitável — 40–64 pts
+          </div>
+          <div class="legend-item">
+            <div class="leg-dot" style="background:var(--red)"></div>
+            Não recomendado &lt;40
+          </div>
+        </div>
+
+        <hr class="sep"/>
+
+        <!-- Tabela de pesos do score -->
+        <div class="sidebar-section">
+          <div class="s-title">Peso do Score</div>
+          <div class="score-info-row"><span>Engajamento</span>      <span class="pts">35pts</span></div>
+          <div class="score-info-row"><span>Reels reach</span>      <span class="pts">25pts</span></div>
+          <div class="score-info-row"><span>Spotify mensal</span>   <span class="pts">20pts</span></div>
+          <div class="score-info-row"><span>Freq. postagem</span>   <span class="pts">15pts</span></div>
+          <div class="score-info-row">
+            <span>Audiência comprada</span>
+            <span class="pts" style="color:var(--red)">-20pts</span>
+          </div>
+          <div class="score-info-row">
+            <span>Colaborou antes</span>
+            <span class="pts" style="color:var(--green)">+5pts</span>
+          </div>
+        </div>
+
+      </aside><!-- /.sidebar -->
+
+
+      <!-- ── GRID DE ARTISTAS ────────────────────────────── -->
+      <main>
+        <div class="grid-header">
+          <div class="grid-count" id="grid-count"></div>
+        </div>
+        <div class="artist-grid" id="artist-grid"></div>
+      </main>
+
+    </div><!-- /.layout -->
+
+  </div><!-- /.container -->
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════════════ -->
+  <footer>
+    <b>MVMNTD INC</b> &nbsp;·&nbsp; NARUA Artist Finder &nbsp;·&nbsp; Rio de Janeiro &nbsp;·&nbsp; 2026
+  </footer>
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       MODAL DE DUE DILIGENCE
+  ═══════════════════════════════════════════════════════ -->
+  <div id="dd-modal" class="dd-overlay" onclick="if(event.target===this)closeDD()">
+    <div class="dd-modal">
+      <div class="dd-modal-head">
+        <div id="dd-title" class="dd-modal-title"></div>
+        <button class="dd-close" onclick="closeDD()">×</button>
+      </div>
+      <div id="dd-body" class="dd-modal-body"></div>
+      <div class="dd-modal-foot">
+        <button class="btn-primary" onclick="closeDD()">Salvar e Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="script.js"></script>
+
+</body>
+</html>
