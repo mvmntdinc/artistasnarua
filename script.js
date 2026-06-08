@@ -366,6 +366,7 @@ function preencherArtista(artist) {
   document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
   document.getElementById('f-pop').value       = artist.popularity      || 0;
   document.getElementById('f-spot-id').value   = artist.id;
+  document.getElementById('f-img-url').value   = artist.images?.[0]?.url || '';
 
   // Campo de nome (usado no cadastro)
   document.getElementById('f-nome').value = artist.name;
@@ -1022,12 +1023,13 @@ async function addArtist() {
     ddChecklist: [],
     spotifyId:   document.getElementById('f-spot-id').value           || '',
     popularidade: parseInt(document.getElementById('f-pop').value)    || 0,
+    imageUrl:    document.getElementById('f-img-url').value           || '',
     incompleto:  !document.getElementById('f-seg').value, // marca como incompleto se não tem dados manuais
   };
 
   artists.push(novoArtista);
 
-  ['f-nome','f-seg','f-eng','f-reels','f-spotify','f-freq','f-tiktok','f-spot-id','f-seg-spot','f-pop','f-nome-display','f-pop-display']
+  ['f-nome','f-seg','f-eng','f-reels','f-spotify','f-freq','f-tiktok','f-spot-id','f-seg-spot','f-pop','f-img-url','f-nome-display','f-pop-display']
     .forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.disabled = false; } });
   document.getElementById('f-niche').value    = 'funk';
   document.getElementById('f-niche').disabled = false;
@@ -1211,12 +1213,33 @@ function buildCard(a) {
       ${a.tiktok ? `<div style="font-size:11px;color:var(--gray2);">TikTok: <b style="color:var(--white)">${fmtN(a.tiktok)}</b></div>` : ''}
     </div>`;
 
+  // Banner: foto do Spotify ou gradiente de fallback
+  const bannerStyle = a.imageUrl
+    ? `background-image:url('${a.imageUrl}');background-size:cover;background-position:center top;`
+    : '';
+  const bannerOverlay = a.imageUrl
+    ? `<div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.18) 0%,rgba(8,8,8,.95) 100%);border-radius:10px 10px 0 0;"></div>`
+    : '';
+
   return `
     <div class="acard ${t}" onclick="openDD(${a.id})" style="cursor:pointer;" title="Clique para ver detalhes">
-      <div class="acard-top"></div>
+      <div class="acard-top ${a.imageUrl ? 'acard-top--photo' : ''}" style="${bannerStyle}">
+        ${bannerOverlay}
+        ${a.imageUrl ? `
+        <div style="position:absolute;bottom:10px;left:14px;right:14px;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8);line-height:1.2;">${a.nome}</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:5px;">
+              <span class="niche-tag" style="background:rgba(0,0,0,.5);backdrop-filter:blur(4px);">${a.niche}</span>
+              ${a.incompleto ? '<span style="font-size:9px;color:var(--amber);background:rgba(0,0,0,.5);border:1px solid rgba(240,160,48,.5);border-radius:10px;padding:1px 6px;">⚠ Incompleto</span>' : ''}
+            </div>
+          </div>
+          <span class="score-pill ${pillCls}" style="flex-shrink:0;">${pillLbl} · ${a.sc}</span>
+        </div>` : ''}
+      </div>
       <button class="btn-del" onclick="event.stopPropagation();deleteArtist(${a.id})" title="Remover">×</button>
       <div class="acard-inner">
-        <div class="acard-head">
+        <div class="acard-head" ${a.imageUrl ? 'style="display:none"' : ''}>
           <div>
             <div class="acard-name">${a.nome}</div>
             <div class="acard-meta">

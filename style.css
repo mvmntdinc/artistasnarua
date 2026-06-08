@@ -714,11 +714,20 @@ input[type="range"]::-moz-range-thumb {
 .acard-top {
   height: 3px;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .acard.ideal .acard-top { background: linear-gradient(90deg, var(--green), transparent); }
 .acard.ok    .acard-top { background: linear-gradient(90deg, var(--amber), transparent); }
 .acard.fraco .acard-top { background: linear-gradient(90deg, var(--red),   transparent); }
+
+/* Banner com foto do Spotify */
+.acard-top--photo {
+  height: 110px;
+  position: relative;
+  border-radius: 10px 10px 0 0;
+  overflow: hidden;
+}
 
 .acard-inner { padding: 16px; }
 

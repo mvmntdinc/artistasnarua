@@ -41,6 +41,7 @@
     const FRANCO_DADOS = {
       nome:      "Franco Trapboy",
       spotifyId: "1lEF3mYcI4rXGRlPXx8ScU",
+      imageUrl:  "https://i.scdn.co/image/ab6761610000e5eb8ae7f2aaa9817a704a87ea36",
       seg:       6000,
       eng:       4.5,
       reels:     20,
@@ -86,6 +87,7 @@
             ...dadosAtuais,
             nome:       FRANCO_DADOS.nome,
             spotifyId:  FRANCO_DADOS.spotifyId,
+            imageUrl:   FRANCO_DADOS.imageUrl || dadosAtuais.imageUrl || '',
             spotify:    FRANCO_DADOS.spotify,   // ouvintes mensais reais
             niche:      dadosAtuais.niche || FRANCO_DADOS.niche,
             // Mantém seg/eng/reels/freq que o usuário preencheu, só atualiza se estiver zerado
