@@ -195,16 +195,41 @@ async function getTopTracks(artistId) {
 /**
  * Botão "Buscar no Spotify" — preenche os campos do formulário automaticamente.
  */
+/**
+ * Extrai o Artist ID de um URL do Spotify.
+ * Ex: https://open.spotify.com/artist/246dkjvS1zLTtiykXe5h60
+ * Retorna null se não for um URL válido.
+ */
+function extractSpotifyId(input) {
+  const match = input.match(/spotify\.com\/artist\/([A-Za-z0-9]+)/);
+  return match ? match[1] : null;
+}
+
 async function fetchSpotify() {
-  const nome = document.getElementById('f-nome').value.trim();
-  if (!nome) { showToast('⚠ Coloca o nome do artista primeiro', 2000); return; }
+  const input = document.getElementById('f-nome').value.trim();
+  if (!input) { showToast('⚠ Cola o link do Spotify do artista', 2000); return; }
 
   const btn = document.getElementById('btn-spotify');
   btn.textContent = '⟳ Buscando...';
   btn.disabled    = true;
 
   try {
-    const artist = await searchSpotifyArtist(nome);
+    let artist;
+    const artistId = extractSpotifyId(input);
+
+    if (artistId) {
+      // URL colado — busca direto pelo ID
+      const token = await getSpotifyToken();
+      const res   = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('Artista não encontrado');
+      artist = await res.json();
+    } else {
+      // Texto digitado — busca por nome (fallback)
+      artist = await searchSpotifyArtist(input);
+    }
+
     if (!artist) { showToast('Artista não encontrado no Spotify', 2500); return; }
 
     // Campos ocultos (internos)
@@ -215,23 +240,13 @@ async function fetchSpotify() {
     // Preenche nome no formulário
     document.getElementById('f-nome').value = artist.name;
 
-    // Estima ouvintes mensais com base na popularidade (0–100)
-    // A API de search não retorna monthly listeners diretamente
-    const pop = artist.popularity || 0;
-    const estimatedListeners =
-      pop >= 80 ? 5000000 :
-      pop >= 70 ? 1500000 :
-      pop >= 60 ? 500000  :
-      pop >= 50 ? 150000  :
-      pop >= 40 ? 50000   :
-      pop >= 30 ? 15000   :
-      pop >= 20 ? 5000    :
-      pop >= 10 ? 1500    : 500;
-    document.getElementById('f-spotify').value = estimatedListeners;
+    // Limpa campo de ouvintes para preenchimento manual
+    // (API de search não retorna monthly listeners confiáveis)
+    document.getElementById('f-spotify').value = '';
 
     const tracks = await getTopTracks(artist.id);
     renderTopTracks(tracks, artist);
-    showToast(`✓ ${artist.name} encontrado · Popularidade: ${pop}/100`);
+    showToast(`✓ ${artist.name} vinculado ao Spotify — preencha os dados manualmente`);
   } catch (e) {
     console.error(e);
     showToast('Erro ao buscar no Spotify. Verifique as credenciais.', 3000);
