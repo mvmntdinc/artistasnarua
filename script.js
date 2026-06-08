@@ -1,10 +1,10 @@
 /* ============================================================
-   NARUA Artist Finder — MVMNTD INC
+   NARUA Artist Finder -- MVMNTD INC
    script.js · Lógica principal + Firebase Firestore
    ============================================================ */
 
 
-/* ── FIREBASE FIRESTORE ──────────────────────────────────── */
+/* -- FIREBASE FIRESTORE ------------------------------------ */
 
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
 import {
@@ -36,7 +36,7 @@ const COLL  = "artistas";
 async function dbLoad() {
   try {
     const snap = await getDocs(collection(db, COLL));
-    if (snap.empty) return null; // sem dados ainda — usa defaults
+    if (snap.empty) return null; // sem dados ainda -- usa defaults
     return snap.docs.map(d => {
       const data = d.data();
       return { tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [], ...data, id: parseInt(d.id) };
@@ -82,7 +82,7 @@ function sanitizeForFirestore(obj) {
 }
 
 
-/* ── SPOTIFY API (PKCE — sem secret, seguro no browser) ─────── */
+/* -- SPOTIFY API (PKCE -- sem secret, seguro no browser) ------- */
 
 const SPOTIFY_CLIENT_ID = 'c8de8dbc0c824f88bf94b42ce58e38ce';
 const SPOTIFY_REDIRECT  = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
@@ -93,7 +93,7 @@ let spotifyToken    = localStorage.getItem('sp_token')   || null;
 let spotifyTokenExp = parseInt(localStorage.getItem('sp_exp') || '0');
 let _refreshingToken = false; // evita chamadas paralelas de refresh
 
-/* ── PKCE helpers ─────────────────────────────────────────── */
+/* -- PKCE helpers ------------------------------------------- */
 function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)))
     .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
@@ -107,7 +107,7 @@ async function generatePKCE() {
 }
 
 /**
- * Inicia o fluxo PKCE — redireciona para o Spotify autorizar.
+ * Inicia o fluxo PKCE -- redireciona para o Spotify autorizar.
  */
 async function startSpotifyAuth() {
   const { verifier, challenge } = await generatePKCE();
@@ -275,7 +275,7 @@ async function silentSpotifyAuth() {
           }
         }
       } catch {
-        // popup ainda em accounts.spotify.com — normal, aguarda
+        // popup ainda em accounts.spotify.com -- normal, aguarda
       }
       if (popup.closed) { clearInterval(check); resolve(null); }
     }, 500);
@@ -286,7 +286,7 @@ async function silentSpotifyAuth() {
 }
 
 /**
- * Busca artistas no Spotify pelo nome — retorna até 5 resultados.
+ * Busca artistas no Spotify pelo nome -- retorna até 5 resultados.
  */
 async function searchSpotifyArtists(queryText) {
   const token = await getSpotifyToken();
@@ -300,7 +300,7 @@ async function searchSpotifyArtists(queryText) {
 
 /**
  * Busca top tracks do artista no Brasil.
- * Requer Spotify Premium — retorna array vazio se der 403.
+ * Requer Spotify Premium -- retorna array vazio se der 403.
  */
 async function getTopTracks(artistId) {
   const token = await getSpotifyToken();
@@ -314,14 +314,14 @@ async function getTopTracks(artistId) {
     const data = await res.json();
     return (data.tracks || []).slice(0, 5).map(t => ({
       nome:    t.name,
-      streams: t.popularity, // API pública não expõe streams reais — usa popularity (0-100) como proxy
+      streams: t.popularity, // API pública não expõe streams reais -- usa popularity (0-100) como proxy
       id:      t.id,
     }));
   } catch { return []; }
 }
 
 /**
- * Botão "Buscar no Spotify" — preenche os campos do formulário automaticamente.
+ * Botão "Buscar no Spotify" -- preenche os campos do formulário automaticamente.
  */
 /**
  * Extrai o Artist ID de um URL do Spotify.
@@ -343,25 +343,36 @@ async function fetchSpotify() {
   btn.disabled    = true;
 
   try {
+    // Usa token em memória ou localStorage diretamente -- sem tentar renovar
+    const token = spotifyToken && Date.now() < spotifyTokenExp
+      ? spotifyToken
+      : localStorage.getItem('sp_token');
+
+    if (!token) {
+      // Sem token -- pede reconexão via clique (não popup automático)
+      document.getElementById('spotify-preview').innerHTML =
+        '<div style="padding:10px;background:var(--surface2);border-radius:8px;display:flex;align-items:center;gap:10px;">'
+        + '<span style="font-size:12px;color:var(--gray2);">Token Spotify expirou.</span>'
+        + '<button onclick="startSpotifyAuth()" style="padding:6px 14px;background:var(--gold);color:#000;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Reconectar Spotify</button>'
+        + '</div>';
+      return;
+    }
+
     const artistId = extractSpotifyId(input);
 
     if (artistId) {
-      // URL colado — busca direto pelo ID, sem dropdown
-      const token = await getSpotifyToken();
-      if (!token) return;
-      const res = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
-        headers: { Authorization: 'Bearer ' + token }
-      });
+      const res = await fetch(`https://api.spotify.com/v1/artists/${artistId}`,
+        { headers: { Authorization: 'Bearer ' + token } });
       if (!res.ok) throw new Error('Artista não encontrado');
       const artist = await res.json();
       preencherArtista(artist);
     } else {
-      // Texto digitado — retorna lista para escolher
-      const token = await getSpotifyToken();
-      if (!token) { showToast('⚠ Reconecte ao Spotify primeiro', 3000); return; }
-      const results = await searchSpotifyArtists(input);
+      const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(input)}&type=artist&market=BR&limit=5`;
+      const res  = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+      if (!res.ok) throw new Error('Erro ' + res.status);
+      const data = await res.json();
+      const results = data?.artists?.items || [];
       if (!results.length) { showToast('Nenhum artista encontrado. Tente o nome exato.', 2500); return; }
-      // Sempre mostra dropdown, mesmo com 1 resultado — pra confirmar
       renderSearchDropdown(results);
     }
   } catch (e) {
@@ -468,13 +479,13 @@ window._searchCache     = _searchCache;
 
 /** Renderiza dropdown para escolher entre múltiplos resultados. */
 function renderSearchDropdown(results) {
-  // Salva no cache com chave numérica — evita JSON no onclick
+  // Salva no cache com chave numérica -- evita JSON no onclick
   results.forEach((a, i) => { _searchCache[i] = a; });
 
   const wrap = document.getElementById('spotify-preview');
   wrap.innerHTML = `
     <div style="margin-bottom:8px;font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;">
-      Vários artistas encontrados — escolha o certo:
+      Vários artistas encontrados -- escolha o certo:
     </div>
     ${results.map((a, i) => {
       const img = a.images?.[0]?.url
@@ -526,7 +537,7 @@ function renderArtistPreview(artist) {
 
 
 
-/* ── PERSISTÊNCIA ───────────────────────────────────────────── */
+/* -- PERSISTÊNCIA --------------------------------------------- */
 
 const STORAGE_KEY = 'narua_artists_v1';
 const NEXTID_KEY  = 'narua_nextid_v1';
@@ -567,7 +578,7 @@ function saveLocal() {
 }
 
 /**
- * saveArtists — salva no Firestore (principal) e localStorage (cache).
+ * saveArtists -- salva no Firestore (principal) e localStorage (cache).
  * Recebe o artista modificado para evitar reescrever tudo no Firestore.
  * Se artistaModificado não for passado, salva tudo localmente apenas.
  */
@@ -613,12 +624,12 @@ function importJSON() {
 }
 
 
-/* ── DADOS INICIAIS ─────────────────────────────────────────── */
+/* -- DADOS INICIAIS ------------------------------------------- */
 
 let artists  = loadLocalArtists(); // substituído pelo Firestore após init
 let nextId   = parseInt(localStorage.getItem(NEXTID_KEY) || '13');
 
-// Cache dos resultados de busca — evita JSON no onclick (quebra com caracteres especiais)
+// Cache dos resultados de busca -- evita JSON no onclick (quebra com caracteres especiais)
 const _searchCache = {};
 let formOpen = true;
 
@@ -629,7 +640,7 @@ let cfg = {
 let abaAtiva = 'todos'; // 'todos' ou 'filtrados'
 
 
-/* ── CHECKLIST DE DUE DILIGENCE ─────────────────────────────── */
+/* -- CHECKLIST DE DUE DILIGENCE ------------------------------- */
 
 const DD_ITEMS = [
   { key: 'spot4a',   label: 'Print Spotify for Artists (28d)' },
@@ -669,7 +680,7 @@ function openDD(id) {
     : ratio >= 4  ? 'var(--amber)'
     : 'var(--red)';
 
-  const ratioLabel = !ratio ? '—'
+  const ratioLabel = !ratio ? '--'
     : ratio >= 10 ? `${ratio} 🔥 Fã real`
     : ratio >= 4  ? `${ratio} ✓ OK`
     : `${ratio} ⚠ Baixo`;
@@ -689,11 +700,11 @@ function openDD(id) {
   // Monta bloco de top músicas para o popup
   const topTracksPopup = (a.topTracks && a.topTracks.length)
     ? `<div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;">
-        <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">🎵 Top Músicas — Streams Totais</div>
+        <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">🎵 Top Músicas -- Streams Totais</div>
         ${a.topTracks.map((t, i) => {
           const maxStr = a.topTracks[0].streams || 1;
           const pct    = t.streams ? Math.round(t.streams / maxStr * 100) : 0;
-          const receita = t.streams ? 'R$' + Math.round(t.streams * 0.013).toLocaleString('pt-BR') : '—';
+          const receita = t.streams ? 'R$' + Math.round(t.streams * 0.013).toLocaleString('pt-BR') : '--';
           return `<div style="margin-bottom:8px;">
             <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
               <span style="font-size:12px;color:var(--white);">${i+1}. ${t.nome}</span>
@@ -764,7 +775,7 @@ function openDD(id) {
     </div>
 
     <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;">
-      <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">TikTok — Seguidores</div>
+      <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">TikTok -- Seguidores</div>
       <input type="number" placeholder="ex: 3500" value="${a.tiktok || ''}"
         oninput="updateDD(${id},'tiktok',this.value)"
         style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:700;font-family:var(--mono);color:var(--white);">
@@ -788,10 +799,10 @@ function openDD(id) {
     <!-- COLUNA DIREITA -->
     <div>
 
-    <!-- ── CALCULADORA DE FEAT ─────────────────────────────── -->
+    <!-- -- CALCULADORA DE FEAT ------------------------------- -->
     <div style="margin-top:16px;border:1px solid var(--border2);border-radius:10px;overflow:hidden;">
       <div style="background:var(--surface2);padding:12px 14px;border-bottom:1px solid var(--border);">
-        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.08em;">💰 Calculadora de Retorno — Feat</div>
+        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.08em;">💰 Calculadora de Retorno -- Feat</div>
         <div style="font-size:10px;color:var(--gray2);margin-top:2px;">Baseado nos streams do artista + seu split</div>
       </div>
       <div style="padding:14px;background:var(--surface);">
@@ -812,10 +823,10 @@ function openDD(id) {
             <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">R$/stream</div>
             <select id="calc-rate" oninput="calcFeat(${id})"
               style="width:100%;background:transparent;border:none;outline:none;font-size:13px;font-weight:700;font-family:var(--mono);color:var(--white);cursor:pointer;">
-              <option value="0.013">R$0,013 — Spotify</option>
-              <option value="0.019">R$0,019 — Apple</option>
-              <option value="0.007">R$0,007 — Deezer</option>
-              <option value="0.004">R$0,004 — YouTube</option>
+              <option value="0.013">R$0,013 -- Spotify</option>
+              <option value="0.019">R$0,019 -- Apple</option>
+              <option value="0.007">R$0,007 -- Deezer</option>
+              <option value="0.004">R$0,004 -- YouTube</option>
             </select>
           </div>
         </div>
@@ -850,12 +861,12 @@ function calcFeat(id) {
 
   // Lógica: um feat bem feito atinge a média das músicas desse artista no mês 1
   // Curva de decaimento realista da indústria
-  const m1 = mediaStreams;           // 100% — lançamento
-  const m2 = mediaStreams * 0.55;    //  55% — ainda quente
-  const m3 = mediaStreams * 0.30;    //  30% — esfriando
+  const m1 = mediaStreams;           // 100% -- lançamento
+  const m2 = mediaStreams * 0.55;    //  55% -- ainda quente
+  const m3 = mediaStreams * 0.30;    //  30% -- esfriando
   const m4 = mediaStreams * 0.18;    //  18%
   const m5 = mediaStreams * 0.12;    //  12%
-  const m6 = mediaStreams * 0.08;    //   8% — cauda longa
+  const m6 = mediaStreams * 0.08;    //   8% -- cauda longa
   const total6m = m1 + m2 + m3 + m4 + m5 + m6;
 
   const rec  = (v) => (v * rate * split).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -904,7 +915,7 @@ function updateDD(id, field, value) {
     const el = document.getElementById(`dd-ratio-${id}`);
     if (el) {
       const c = !ratio ? 'var(--gray2)' : ratio >= 10 ? 'var(--green)' : ratio >= 4 ? 'var(--amber)' : 'var(--red)';
-      const l = !ratio ? '—' : ratio >= 10 ? `${ratio} 🔥 Fã real` : ratio >= 4 ? `${ratio} ✓ OK` : `${ratio} ⚠ Baixo`;
+      const l = !ratio ? '--' : ratio >= 10 ? `${ratio} 🔥 Fã real` : ratio >= 4 ? `${ratio} ✓ OK` : `${ratio} ⚠ Baixo`;
       el.style.color = c;
       el.textContent = l;
     }
@@ -929,7 +940,7 @@ function closeDD() {
 }
 
 
-/* ── ALGORITMO DE SCORE ─────────────────────────────────────── */
+/* -- ALGORITMO DE SCORE --------------------------------------- */
 
 function calcScore(a) {
   let s = 0;
@@ -980,7 +991,7 @@ function tier(score) {
 }
 
 
-/* ── UTILITÁRIOS ────────────────────────────────────────────── */
+/* -- UTILITÁRIOS ---------------------------------------------- */
 
 function barColor(t) {
   return t === 'ideal' ? 'var(--green)' : t === 'ok' ? 'var(--amber)' : 'var(--red)';
@@ -996,7 +1007,7 @@ function ddProgress(a) {
 }
 
 
-/* ── SVG SCORE RING ─────────────────────────────────────────── */
+/* -- SVG SCORE RING ------------------------------------------- */
 
 function buildRing(sc, t) {
   const color = t === 'ideal' ? '#00C98D' : t === 'ok' ? '#F0A030' : '#FF4D4D';
@@ -1018,7 +1029,7 @@ function buildRing(sc, t) {
 }
 
 
-/* ── ABAS ───────────────────────────────────────────────────── */
+/* -- ABAS ----------------------------------------------------- */
 
 function setTab(aba) {
   abaAtiva = aba;
@@ -1030,7 +1041,7 @@ function setTab(aba) {
 window.setTab = setTab;
 
 
-/* ── FILTROS ────────────────────────────────────────────────── */
+/* -- FILTROS -------------------------------------------------- */
 
 function sf(key, val, suffix) {
   cfg[key] = parseFloat(val);
@@ -1047,7 +1058,7 @@ function sfSpot(val) {
 }
 
 
-/* ── FORMULÁRIO ─────────────────────────────────────────────── */
+/* -- FORMULÁRIO ----------------------------------------------- */
 
 function toggleForm() {
   formOpen = !formOpen;
@@ -1072,10 +1083,8 @@ function lerTopTracksForm() {
 }
 
 async function addArtist() {
-  const nome      = document.getElementById('f-nome').value.trim();
-  const spotifyId = document.getElementById('f-spot-id').value.trim();
-  if (!nome) { showToast('⚠ Busca o artista no Spotify primeiro!', 3000); return; }
-  if (!spotifyId) { showToast('⚠ Seleciona o artista no Spotify antes de cadastrar!', 3000); return; }
+  const nome = document.getElementById('f-nome').value.trim();
+  if (!nome) { showToast('⚠ Preencha o nome do artista!', 3000); return; }
 
   const novoArtista = {
     id:          nextId++,
@@ -1138,7 +1147,7 @@ async function clearAll() {
 }
 
 
-/* ── RENDER PRINCIPAL ───────────────────────────────────────── */
+/* -- RENDER PRINCIPAL ----------------------------------------- */
 
 function render() {
   const excComp = document.getElementById('tgl-comp').checked;
@@ -1147,7 +1156,7 @@ function render() {
     ...a, sc: calcScore(a), tier: tier(calcScore(a)),
   }));
 
-  // "Todos" mostra tudo, sem filtro — só ordena por score
+  // "Todos" mostra tudo, sem filtro -- só ordena por score
   // "Filtrados" aplica todos os filtros da sidebar
   const filtered = abaAtiva === 'todos'
     ? scored
@@ -1193,7 +1202,7 @@ function render() {
       <span class="ib-chip">Reels <b>≥${cfg.reels}%</b></span>
       <span class="ib-chip">Spotify <b>≥${spotLabel}</b></span>
       <span class="ib-chip">Posts <b>≥${cfg.freq}x/sem</b></span>
-      <span class="ib-chip">Seg. <b>${cfg.segmin}K–${cfg.segmax}K</b></span>
+      <span class="ib-chip">Seg. <b>${cfg.segmin}K-${cfg.segmax}K</b></span>
       ${excChip}
     </div>
   `;
@@ -1217,7 +1226,7 @@ function render() {
 }
 
 
-/* ── BUILD CARD ─────────────────────────────────────────────── */
+/* -- BUILD CARD ----------------------------------------------- */
 
 function buildCard(a) {
   const t       = a.tier;
@@ -1368,7 +1377,7 @@ function buildCard(a) {
 }
 
 
-/* ── TOAST ──────────────────────────────────────────────────── */
+/* -- TOAST ---------------------------------------------------- */
 
 function showToast(msg, ms = 2500) {
   let toast = document.getElementById('toast');
@@ -1384,7 +1393,7 @@ function showToast(msg, ms = 2500) {
 }
 
 
-/* ── EXPÕE FUNÇÕES PARA O HTML (onclick=) ────────────────────── */
+/* -- EXPÕE FUNÇÕES PARA O HTML (onclick=) ---------------------- */
 // Como o script usa "type=module", as funções não ficam no escopo global
 // automaticamente. Precisamos expô-las manualmente via window.
 
@@ -1404,7 +1413,7 @@ window.toggleDD      = toggleDD;
 window.render        = render;
 
 
-/* ── ENRICH: busca fotos do Spotify para artistas sem imageUrl ── */
+/* -- ENRICH: busca fotos do Spotify para artistas sem imageUrl -- */
 
 async function enrichArtistPhotos() {
   const semFoto = artists.filter(a => a.spotifyId && !a.imageUrl);
@@ -1440,26 +1449,21 @@ async function enrichArtistPhotos() {
 }
 
 
-/* ── INIT ───────────────────────────────────────────────────── */
+/* -- INIT -------------------------------------------------------- */
 
 async function init() {
-  // Mostra dados do localStorage imediatamente (sem piscar)
   render();
 
-  // Tenta carregar do Firestore em paralelo
   const fbArtists = await dbLoad();
   if (fbArtists && fbArtists.length > 0) {
     artists = fbArtists;
     nextId  = Math.max(...artists.map(a => a.id)) + 1;
     saveLocal();
     render();
-    showToast(`☁ ${artists.length} artistas carregados da nuvem`);
-
-    // Busca foto do Spotify para artistas que têm spotifyId mas não têm imageUrl
+    showToast('☁ ' + artists.length + ' artistas carregados da nuvem');
     enrichArtistPhotos();
   }
 
-  // Processa callback do Spotify se vier com ?code=
   if (location.search.includes('code=')) {
     await handleSpotifyCallback();
     render();
