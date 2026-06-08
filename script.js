@@ -1336,6 +1336,42 @@ window.toggleDD      = toggleDD;
 window.render        = render;
 
 
+/* ── ENRICH: busca fotos do Spotify para artistas sem imageUrl ── */
+
+async function enrichArtistPhotos() {
+  const semFoto = artists.filter(a => a.spotifyId && !a.imageUrl);
+  if (!semFoto.length) return;
+
+  const token = await getSpotifyToken();
+  if (!token) return;
+
+  // Busca em lotes de 50 (limite da API)
+  const ids = semFoto.map(a => a.spotifyId);
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    try {
+      const res = await fetch(
+        `https://api.spotify.com/v1/artists?ids=${batch.join(',')}`,
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      let updated = false;
+      for (const spArtist of (data.artists || [])) {
+        if (!spArtist) continue;
+        const local = artists.find(a => a.spotifyId === spArtist.id);
+        if (local && !local.imageUrl && spArtist.images?.[0]?.url) {
+          local.imageUrl = spArtist.images[0].url;
+          dbSave(local); // salva no Firebase silenciosamente
+          updated = true;
+        }
+      }
+      if (updated) { saveLocal(); render(); }
+    } catch(e) { /* silencioso */ }
+  }
+}
+
+
 /* ── INIT ───────────────────────────────────────────────────── */
 
 async function init() {
@@ -1347,9 +1383,12 @@ async function init() {
   if (fbArtists && fbArtists.length > 0) {
     artists = fbArtists;
     nextId  = Math.max(...artists.map(a => a.id)) + 1;
-    saveLocal(); // atualiza o cache local
-    render();    // re-renderiza com dados da nuvem
+    saveLocal();
+    render();
     showToast(`☁ ${artists.length} artistas carregados da nuvem`);
+
+    // Busca foto do Spotify para artistas que têm spotifyId mas não têm imageUrl
+    enrichArtistPhotos();
   }
 
   // Processa callback do Spotify se vier com ?code=
