@@ -232,21 +232,44 @@ async function fetchSpotify() {
 
     if (!artist) { showToast('Artista não encontrado no Spotify', 2500); return; }
 
-    // Campos ocultos (internos)
+    // ── Campos ocultos (internos) ────────────────────────────
     document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
     document.getElementById('f-pop').value       = artist.popularity      || 0;
     document.getElementById('f-spot-id').value   = artist.id;
 
-    // Preenche nome no formulário
+    // ── Campos visíveis preenchidos automaticamente ──────────
+
+    // Nome
     document.getElementById('f-nome').value = artist.name;
 
-    // Limpa campo de ouvintes para preenchimento manual
-    // (API de search não retorna monthly listeners confiáveis)
-    document.getElementById('f-spotify').value = '';
+    // Seguidores Spotify → campo "Ouvintes Spotify/mês"
+    // (followers é o dado mais confiável que a API entrega)
+    const followers = artist.followers?.total || 0;
+    document.getElementById('f-spotify').value = followers;
 
+    // Nicho → baseado no primeiro gênero do Spotify
+    const genreMap = {
+      funk: 'funk', trap: 'trap', rap: 'rap', 'hip hop': 'rap',
+      'hip-hop': 'rap', 'r&b': 'rb', 'soul': 'rb', reggae: 'outro',
+      sertanejo: 'outro', pagode: 'outro', axe: 'outro',
+    };
+    const genres = artist.genres || [];
+    let nichoDetectado = 'outro';
+    for (const g of genres) {
+      const gLower = g.toLowerCase();
+      for (const [key, val] of Object.entries(genreMap)) {
+        if (gLower.includes(key)) { nichoDetectado = val; break; }
+      }
+      if (nichoDetectado !== 'outro') break;
+    }
+    document.getElementById('f-niche').value = nichoDetectado;
+
+    // Busca top tracks
     const tracks = await getTopTracks(artist.id);
     renderTopTracks(tracks, artist);
-    showToast(`✓ ${artist.name} vinculado ao Spotify — preencha os dados manualmente`);
+
+    const genreStr = genres.slice(0, 2).join(', ') || 'gênero não identificado';
+    showToast(`✓ ${artist.name} · ${fmtN(followers)} seguidores · ${genreStr}`);
   } catch (e) {
     console.error(e);
     showToast('Erro ao buscar no Spotify. Verifique as credenciais.', 3000);
