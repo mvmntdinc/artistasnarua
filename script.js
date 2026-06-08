@@ -363,7 +363,7 @@ let nextId   = parseInt(localStorage.getItem(NEXTID_KEY) || '13');
 let formOpen = true;
 
 let cfg = {
-  eng: 3, reels: 15, spotify: 500, freq: 2, segmin: 5, segmax: 50,
+  eng: 3, reels: 15, spotify: 500, freq: 2, segmin: 0, segmax: 50,
 };
 
 
