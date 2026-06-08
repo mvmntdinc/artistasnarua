@@ -588,8 +588,50 @@ function openDD(id) {
       </label>`;
   }).join('');
 
-  document.getElementById('dd-title').textContent = `Due Diligence — ${a.nome}`;
-  document.getElementById('dd-body').innerHTML = `
+  // Monta bloco de top músicas para o popup
+  const topTracksPopup = (a.topTracks && a.topTracks.length)
+    ? `<div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">🎵 Top Músicas — Streams Totais</div>
+        ${a.topTracks.map((t, i) => {
+          const maxStr = a.topTracks[0].streams || 1;
+          const pct    = t.streams ? Math.round(t.streams / maxStr * 100) : 0;
+          const receita = t.streams ? 'R$' + Math.round(t.streams * 0.013).toLocaleString('pt-BR') : '—';
+          return `<div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+              <span style="font-size:12px;color:var(--white);">${i+1}. ${t.nome}</span>
+              <span style="font-size:11px;font-family:var(--mono);color:var(--gray2);">${t.streams ? (t.streams/1000).toFixed(0)+'K' : '?'} · <b style="color:var(--gold)">${receita}</b></span>
+            </div>
+            <div style="height:4px;background:var(--surface3);border-radius:2px;">
+              <div style="height:100%;width:${pct}%;background:var(--gold);border-radius:2px;opacity:.8;"></div>
+            </div>
+          </div>`;
+        }).join('')}
+        ${a.totalStreams ? `<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;display:flex;justify-content:space-between;">
+          <span style="font-size:11px;color:var(--gray2);">Total acumulado</span>
+          <span style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--gold);">R$${Math.round(a.totalStreams * 0.013).toLocaleString('pt-BR')}</span>
+        </div>` : ''}
+      </div>` : '';
+
+  // Perfil resumido no topo
+  const perfilHtml = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+      <div style="width:48px;height:48px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#000;flex-shrink:0;">${a.nome.charAt(0)}</div>
+      <div style="flex:1;">
+        <div style="font-size:16px;font-weight:700;color:var(--white);">${a.nome}</div>
+        <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:var(--gray2);">👥 <b style="color:var(--white)">${fmtN(a.seg)}</b> seg. IG</span>
+          <span style="font-size:11px;color:var(--gray2);">🎧 <b style="color:var(--white)">${fmtN(a.spotify)}</b> ouv/mês</span>
+          <span style="font-size:11px;color:var(--gray2);">📊 <b style="color:var(--white)">${a.eng}%</b> eng.</span>
+          ${a.tiktok ? `<span style="font-size:11px;color:var(--gray2);">🎵 <b style="color:var(--white)">${fmtN(a.tiktok)}</b> TikTok</span>` : ''}
+        </div>
+      </div>
+      <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:${a.niche==='trap'?'rgba(201,168,76,.15)':'var(--surface2)'};color:var(--gold);border:1px solid var(--gold-dim);">${a.niche}</span>
+    </div>
+    ${topTracksPopup}
+  `;
+
+  document.getElementById('dd-title').textContent = `${a.nome}`;
+  document.getElementById('dd-body').innerHTML = perfilHtml + `
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
       <div style="background:var(--surface2);border-radius:8px;padding:12px;">
@@ -1096,6 +1138,29 @@ function buildCard(a) {
   const ratio    = hasRatio ? (a.streams28 / a.ouvintes28).toFixed(1) : null;
   const ratioC   = !ratio ? 'var(--gray3)' : ratio >= 10 ? 'var(--green)' : ratio >= 4 ? 'var(--amber)' : 'var(--red)';
 
+  // Top músicas (se existirem)
+  const topTracksHtml = (a.topTracks && a.topTracks.length)
+    ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Top Músicas</div>
+        ${a.topTracks.filter(t => t.streams > 0).map((t, i) => {
+          const maxStr = a.topTracks[0].streams || 1;
+          const pct    = Math.round(t.streams / maxStr * 100);
+          const receita = 'R$' + (t.streams * 0.013).toLocaleString('pt-BR', {maximumFractionDigits: 0});
+          return `
+            <div style="margin-bottom:7px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                <span style="font-size:11px;color:var(--gray1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;">${i+1}. ${t.nome}</span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--gray2);">${(t.streams/1000).toFixed(0)}K · <span style="color:var(--gold)">${receita}</span></span>
+              </div>
+              <div style="height:3px;background:var(--surface3);border-radius:2px;">
+                <div style="height:100%;width:${pct}%;background:var(--gold);border-radius:2px;opacity:.7;"></div>
+              </div>
+            </div>`;
+        }).join('')}
+        ${a.totalStreams ? `<div style="font-size:10px;color:var(--gray2);margin-top:4px;">Total acumulado: <b style="color:var(--white)">${(a.totalStreams/1000).toFixed(0)}K streams</b> · <b style="color:var(--gold)">R$${(a.totalStreams * 0.013).toLocaleString('pt-BR', {maximumFractionDigits: 0})}</b></div>` : ''}
+      </div>`
+    : '';
+
   const ddBar = `
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
@@ -1110,9 +1175,9 @@ function buildCard(a) {
     </div>`;
 
   return `
-    <div class="acard ${t}">
+    <div class="acard ${t}" onclick="openDD(${a.id})" style="cursor:pointer;" title="Clique para ver detalhes">
       <div class="acard-top"></div>
-      <button class="btn-del" onclick="deleteArtist(${a.id})" title="Remover">×</button>
+      <button class="btn-del" onclick="event.stopPropagation();deleteArtist(${a.id})" title="Remover">×</button>
       <div class="acard-inner">
         <div class="acard-head">
           <div>
@@ -1158,15 +1223,11 @@ function buildCard(a) {
           ${warns.map(w => `<span class="tag-w">${w}</span>`).join('')}
           ${goods.map(g => `<span class="tag-g">${g}</span>`).join('')}
         </div>
-        ${ddBar}
-        <button onclick="openDD(${a.id})"
-          style="margin-top:10px;width:100%;background:var(--surface2);border:1px solid var(--border2);
-                 border-radius:8px;padding:7px;font-size:11px;font-weight:700;color:var(--gray1);
-                 cursor:pointer;letter-spacing:.04em;text-transform:uppercase;transition:background .15s,color .15s;"
-          onmouseover="this.style.background='var(--gold-bg)';this.style.color='var(--gold)';this.style.borderColor='var(--gold-dim)'"
-          onmouseout="this.style.background='var(--surface2)';this.style.color='var(--gray1)';this.style.borderColor='var(--border2)'">
-          Due Diligence ${dd.done > 0 ? `· ${dd.done}/${dd.total}` : ''}
-        </button>
+        <!-- DD progress mini -->
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:10px;color:var(--gray3);">Clique para ver detalhes + calculadora</span>
+          <span style="font-size:10px;font-family:var(--mono);color:${dd.done===dd.total?'var(--green)':'var(--gray2)'}">DD ${dd.done}/${dd.total}</span>
+        </div>
       </div>
     </div>`;
 }

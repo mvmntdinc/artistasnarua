@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Atualizar Franco Trapboy — NARUA</title>
+  <style>
+    body { font-family: monospace; background: #080808; color: #aaa; padding: 40px; }
+    h2 { color: #C9A84C; }
+    #log { background: #111; border: 1px solid #333; border-radius: 8px; padding: 20px; line-height: 2; }
+    .ok  { color: #00C98D; }
+    .err { color: #FF4D4D; }
+    .info { color: #C9A84C; }
+  </style>
+</head>
+<body>
+  <h2>🔧 Atualizando Franco Trapboy no Firebase...</h2>
+  <div id="log"></div>
+
+  <script type="module">
+    import { initializeApp }  from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getFirestore, collection, getDocs, setDoc, doc } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+
+    const log = (msg, cls='info') => {
+      document.getElementById('log').innerHTML += `<div class="${cls}">${msg}</div>`;
+    };
+
+    const firebaseConfig = {
+      apiKey:            "AIzaSyDYwBUEWhQNCRB5wZUCP1PrkgK_Q57QIZo",
+      authDomain:        "artistas-na-rua.firebaseapp.com",
+      projectId:         "artistas-na-rua",
+      storageBucket:     "artistas-na-rua.firebasestorage.app",
+      messagingSenderId: "998571196526",
+      appId:             "1:998571196526:web:b3f4e7d65bba6bdf32e67f",
+    };
+
+    const app  = initializeApp(firebaseConfig);
+    const db   = getFirestore(app);
+    const COLL = "artistas";
+
+    // Dados reais do Franco Trapboy (Spotify público — coletado 08/06/2026)
+    const FRANCO_DADOS = {
+      nome:      "Franco Trapboy",
+      spotifyId: "1lEF3mYcI4rXGRlPXx8ScU",
+      seg:       6000,
+      eng:       4.5,
+      reels:     20,
+      spotify:   1923,      // ouvintes mensais reais
+      freq:      3,
+      niche:     "trap",
+      comp:      false,
+      colab:     false,
+      tiktok:    1000,
+      streams28: 50000,
+      ouvintes28: 1923,
+      ddChecklist: [],
+      topTracks: [
+        { nome: "Diamante na Lama",   streams: 551761 },
+        { nome: "Diamante na Lama 2", streams: 209288 },
+        { nome: "Uber Black",         streams: 136753 },
+        { nome: "No Faro das Notas",  streams: 23484  },
+        { nome: "MVMNTD",             streams: 0      },
+      ],
+      totalStreams: 921286, // soma das músicas com streams conhecidos
+    };
+
+    async function atualizar() {
+      log("⟳ Conectando ao Firebase...");
+
+      try {
+        const snap = await getDocs(collection(db, COLL));
+        log(`✓ ${snap.docs.length} artistas encontrados no Firebase`, 'ok');
+
+        // Procura Franco Trapboy pelo nome (case insensitive)
+        const francoDoc = snap.docs.find(d => {
+          const nome = (d.data().nome || '').toLowerCase();
+          return nome.includes('franco') && nome.includes('trapboy');
+        });
+
+        if (francoDoc) {
+          const dadosAtuais = francoDoc.data();
+          log(`✓ Franco Trapboy encontrado! ID no Firebase: <b>${francoDoc.id}</b>`, 'ok');
+          log(`→ Dados atuais: ${dadosAtuais.spotify} ouvintes · ${dadosAtuais.seg} seguidores`);
+
+          // Preserva os dados que o usuário preencheu manualmente, atualiza só o que veio do Spotify
+          const dadosAtualizados = {
+            ...dadosAtuais,
+            nome:       FRANCO_DADOS.nome,
+            spotifyId:  FRANCO_DADOS.spotifyId,
+            spotify:    FRANCO_DADOS.spotify,   // ouvintes mensais reais
+            niche:      dadosAtuais.niche || FRANCO_DADOS.niche,
+            // Mantém seg/eng/reels/freq que o usuário preencheu, só atualiza se estiver zerado
+            seg:        dadosAtuais.seg   || FRANCO_DADOS.seg,
+            eng:        dadosAtuais.eng   || FRANCO_DADOS.eng,
+            reels:      dadosAtuais.reels || FRANCO_DADOS.reels,
+            freq:       dadosAtuais.freq  || FRANCO_DADOS.freq,
+            tiktok:     dadosAtuais.tiktok || FRANCO_DADOS.tiktok,
+            streams28:  dadosAtuais.streams28  || FRANCO_DADOS.streams28,
+            ouvintes28: dadosAtuais.ouvintes28 || FRANCO_DADOS.ouvintes28,
+          };
+
+          await setDoc(doc(db, COLL, francoDoc.id), dadosAtualizados);
+          log(`✓ Franco Trapboy atualizado com sucesso!`, 'ok');
+          log(`→ Ouvintes Spotify: <b>${dadosAtualizados.spotify}</b>`);
+          log(`→ Seguidores Instagram: <b>${dadosAtualizados.seg}</b>`);
+          log(`→ Nicho: <b>${dadosAtualizados.niche}</b>`);
+          log(`→ SpotifyID: <b>${dadosAtualizados.spotifyId}</b>`);
+          log(`<br>✅ <b style="color:#00C98D">Pronto! Pode fechar essa página e abrir o dashboard.</b>`, 'ok');
+        } else {
+          log(`⚠ Franco Trapboy não encontrado — criando novo registro...`, 'err');
+          // Cria novo com ID alto pra não conflitar
+          const maxId = Math.max(...snap.docs.map(d => parseInt(d.id) || 0), 100);
+          const novoId = maxId + 1;
+          await setDoc(doc(db, COLL, String(novoId)), { ...FRANCO_DADOS, id: novoId });
+          log(`✓ Franco Trapboy criado com ID ${novoId}`, 'ok');
+          log(`<br>✅ <b style="color:#00C98D">Pronto! Pode fechar essa página e abrir o dashboard.</b>`, 'ok');
+        }
+      } catch (e) {
+        log(`❌ Erro: ${e.message}`, 'err');
+        console.error(e);
+      }
+    }
+
+    atualizar();
+  </script>
+</body>
+</html>
