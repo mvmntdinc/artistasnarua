@@ -633,10 +633,135 @@ function openDD(id) {
         em mídia vai retornar pra você também."
       </div>
     </div>
+
+    <!-- ── CALCULADORA DE FEAT ─────────────────────────────── -->
+    <div style="margin-top:16px;border:1px solid var(--border2);border-radius:10px;overflow:hidden;">
+      <div style="background:var(--surface2);padding:12px 14px;border-bottom:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.08em;">💰 Calculadora de Retorno — Feat</div>
+        <div style="font-size:10px;color:var(--gray2);margin-top:2px;">Baseado nos streams do artista + seu split</div>
+      </div>
+      <div style="padding:14px;background:var(--surface);">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
+            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Streams/mês do artista</div>
+            <input type="number" id="calc-streams" placeholder="ex: 80000"
+              value="${a.streams28 ? Math.round(a.streams28 * 1.1) : ''}"
+              oninput="calcFeat(${id})"
+              style="width:100%;background:transparent;border:none;outline:none;font-size:16px;font-weight:700;font-family:var(--mono);color:var(--white);">
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
+            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Seus streams/mês</div>
+            <input type="number" id="calc-meus-streams" placeholder="ex: 50000"
+              oninput="calcFeat(${id})"
+              style="width:100%;background:transparent;border:none;outline:none;font-size:16px;font-weight:700;font-family:var(--mono);color:var(--white);">
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
+            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Seu split %</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="range" id="calc-split" min="10" max="90" step="5" value="50"
+                oninput="calcFeat(${id});document.getElementById('calc-split-lbl').textContent=this.value+'%'"
+                style="flex:1;accent-color:var(--gold);">
+              <span id="calc-split-lbl" style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--gold);min-width:32px;">50%</span>
+            </div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
+            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Taxa conversão %</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="range" id="calc-conv" min="5" max="50" step="5" value="20"
+                oninput="calcFeat(${id});document.getElementById('calc-conv-lbl').textContent=this.value+'%'"
+                style="flex:1;accent-color:var(--gold);">
+              <span id="calc-conv-lbl" style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--gold);min-width:32px;">20%</span>
+            </div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
+            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">R$/stream</div>
+            <select id="calc-rate" oninput="calcFeat(${id})"
+              style="width:100%;background:transparent;border:none;outline:none;font-size:13px;font-weight:700;font-family:var(--mono);color:var(--white);cursor:pointer;">
+              <option value="0.013">R$0,013 — Spotify</option>
+              <option value="0.019">R$0,019 — Apple</option>
+              <option value="0.007">R$0,007 — Deezer</option>
+              <option value="0.004">R$0,004 — YouTube</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Resultado -->
+        <div id="calc-resultado-${id}" style="background:var(--surface2);border-radius:8px;padding:14px;text-align:center;">
+          <div style="font-size:11px;color:var(--gray2);margin-bottom:8px;">Preencha os streams acima para calcular</div>
+        </div>
+
+      </div>
+    </div>
   `;
 
   document.getElementById('dd-modal').style.display = 'flex';
 }
+
+/** Calcula retorno financeiro estimado do feat em tempo real. */
+function calcFeat(id) {
+  const streamsArtista  = parseFloat(document.getElementById('calc-streams')?.value)       || 0;
+  const streamsMeus     = parseFloat(document.getElementById('calc-meus-streams')?.value)  || 0;
+  const split           = parseFloat(document.getElementById('calc-split')?.value)         / 100 || 0.5;
+  const conv            = parseFloat(document.getElementById('calc-conv')?.value)          / 100 || 0.2;
+  const rate            = parseFloat(document.getElementById('calc-rate')?.value)          || 0.013;
+  const el              = document.getElementById(`calc-resultado-${id}`);
+  if (!el) return;
+
+  if (!streamsArtista && !streamsMeus) {
+    el.innerHTML = `<div style="font-size:11px;color:var(--gray2);">Preencha os streams acima para calcular</div>`;
+    return;
+  }
+
+  // Streams gerados pelo feat
+  // Audiência do artista: conv% dos ouvintes dele vão ouvir o feat
+  // Audiência sua: 100% dos seus ouvintes já está exposto
+  const streamsDoArtista = streamsArtista * conv;
+  const streamsTotais    = streamsDoArtista + streamsMeus;
+
+  // Curva de decaimento: mês 1 = 100%, mês 2 = 60%, mês 3 = 35%, mês 6 = 15%
+  const m1 = streamsTotais;
+  const m2 = streamsTotais * 0.60;
+  const m3 = streamsTotais * 0.35;
+  const m6 = streamsTotais * 0.15;
+  const total6m = m1 + m2 + m3 + (streamsTotais * 0.25) + (streamsTotais * 0.20) + m6;
+
+  const receitaMes = (v) => (v * rate * split).toFixed(2).replace('.', ',');
+  const receitaTotal = (total6m * rate * split).toFixed(2).replace('.', ',');
+  const fmtStr = (v) => v >= 1000 ? (v/1000).toFixed(0)+'K' : Math.round(v).toString();
+
+  const corMes1 = (m1 * rate * split) >= 500 ? 'var(--green)' : (m1 * rate * split) >= 100 ? 'var(--amber)' : 'var(--gray1)';
+
+  el.innerHTML = `
+    <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">
+      Projeção — ${fmtStr(streamsTotais)} streams/mês · Split ${Math.round(split*100)}%
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
+      ${[['Mês 1', m1, true], ['Mês 2', m2, false], ['Mês 3', m3, false], ['Mês 6', m6, false]].map(([label, str, destaque]) => `
+        <div style="background:${destaque?'var(--gold-bg)':'var(--surface3)'};border:1px solid ${destaque?'var(--gold-dim)':'var(--border)'};border-radius:7px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:var(--gray2);margin-bottom:3px;">${label}</div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--gray2);">${fmtStr(str)} str.</div>
+          <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:${destaque?corMes1:'var(--white)'};">R$${receitaMes(str)}</div>
+        </div>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface3);border-radius:8px;padding:10px 14px;">
+      <div>
+        <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;">Total 6 meses</div>
+        <div style="font-size:11px;color:var(--gray2);">${fmtStr(total6m)} streams acumulados</div>
+      </div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--gold);">R$${receitaTotal}</div>
+    </div>
+    <div style="font-size:10px;color:var(--gray3);margin-top:8px;line-height:1.5;">
+      * Conversão ${Math.round(conv*100)}% = % dos ouvintes do artista que vão ouvir o feat.
+      Curva de decaimento padrão da indústria (mês 1 → 6). Valores estimados.
+    </div>
+  `;
+}
+
+window.calcFeat = calcFeat;
 
 /** Atualiza campo de due diligence e recalcula ratio ao vivo. */
 function updateDD(id, field, value) {
