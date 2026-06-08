@@ -408,9 +408,13 @@ function preencherArtista(artist) {
 }
 
 window.preencherArtista = preencherArtista;
+window._searchCache     = _searchCache;
 
 /** Renderiza dropdown para escolher entre múltiplos resultados. */
 function renderSearchDropdown(results) {
+  // Salva no cache com chave numérica — evita JSON no onclick
+  results.forEach((a, i) => { _searchCache[i] = a; });
+
   const wrap = document.getElementById('spotify-preview');
   wrap.innerHTML = `
     <div style="margin-bottom:8px;font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;">
@@ -420,12 +424,12 @@ function renderSearchDropdown(results) {
       const img = a.images?.[0]?.url
         ? `<img src="${a.images[0].url}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;">`
         : `<div style="width:40px;height:40px;border-radius:6px;background:var(--surface3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">🎵</div>`;
-      const pop   = a.popularity || 0;
-      const genre = a.genres?.[0] || '';
+      const pop      = a.popularity || 0;
+      const genre    = a.genres?.[0] || '';
       const popColor = pop >= 70 ? 'var(--green)' : pop >= 40 ? 'var(--amber)' : 'var(--gray2)';
       const popLabel = pop >= 70 ? '🔥 Famoso' : pop >= 40 ? '📈 Em alta' : pop > 0 ? '🎵 Indie' : '';
       return `
-        <div onclick="preencherArtista(${JSON.stringify(a).replace(/"/g, '&quot;')})"
+        <div onclick="preencherArtista(window._searchCache[${i}])"
           style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;
                  border:1px solid var(--border);background:var(--surface2);cursor:pointer;
                  margin-bottom:6px;transition:border-color .15s,background .15s;"
@@ -557,6 +561,9 @@ function importJSON() {
 
 let artists  = loadLocalArtists(); // substituído pelo Firestore após init
 let nextId   = parseInt(localStorage.getItem(NEXTID_KEY) || '13');
+
+// Cache dos resultados de busca — evita JSON no onclick (quebra com caracteres especiais)
+const _searchCache = {};
 let formOpen = true;
 
 let cfg = {
@@ -1007,8 +1014,10 @@ function toggleForm() {
 }
 
 async function addArtist() {
-  const nome = document.getElementById('f-nome').value.trim();
-  if (!nome) { alert('Busca o artista no Spotify primeiro!'); return; }
+  const nome      = document.getElementById('f-nome').value.trim();
+  const spotifyId = document.getElementById('f-spot-id').value.trim();
+  if (!nome) { showToast('⚠ Busca o artista no Spotify primeiro!', 3000); return; }
+  if (!spotifyId) { showToast('⚠ Seleciona o artista no Spotify antes de cadastrar!', 3000); return; }
 
   const novoArtista = {
     id:          nextId++,
