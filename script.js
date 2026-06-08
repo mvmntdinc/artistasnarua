@@ -1,13 +1,90 @@
 /* ============================================================
    NARUA Artist Finder — MVMNTD INC
-   script.js · Lógica principal
+   script.js · Lógica principal + Firebase Firestore
    ============================================================ */
+
+
+/* ── FIREBASE FIRESTORE ──────────────────────────────────── */
+
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  doc,
+} from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyDYwBUEWhQNCRB5wZUCP1PrkgK_Q57QIZo",
+  authDomain:        "artistas-na-rua.firebaseapp.com",
+  projectId:         "artistas-na-rua",
+  storageBucket:     "artistas-na-rua.firebasestorage.app",
+  messagingSenderId: "998571196526",
+  appId:             "1:998571196526:web:b3f4e7d65bba6bdf32e67f",
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db    = getFirestore(fbApp);
+const COLL  = "artistas";
+
+/**
+ * Carrega artistas do Firestore.
+ * Retorna null em caso de erro (usa fallback localStorage).
+ */
+async function dbLoad() {
+  try {
+    const snap = await getDocs(collection(db, COLL));
+    if (snap.empty) return null; // sem dados ainda — usa defaults
+    return snap.docs.map(d => {
+      const data = d.data();
+      return { tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [], ...data, id: parseInt(d.id) };
+    });
+  } catch (e) {
+    console.warn("Firestore indisponível, usando localStorage:", e);
+    return null;
+  }
+}
+
+/** Salva/atualiza um artista no Firestore. */
+async function dbSave(artist) {
+  try {
+    await setDoc(doc(db, COLL, String(artist.id)), sanitizeForFirestore(artist));
+  } catch (e) {
+    console.warn("Erro ao salvar no Firestore:", e);
+  }
+}
+
+/** Remove um artista do Firestore. */
+async function dbDelete(id) {
+  try {
+    await deleteDoc(doc(db, COLL, String(id)));
+  } catch (e) {
+    console.warn("Erro ao deletar do Firestore:", e);
+  }
+}
+
+/** Salva lista inteira (usado em importação). */
+async function dbSaveAll(list) {
+  try {
+    const snap = await getDocs(collection(db, COLL));
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, COLL, d.id))));
+    await Promise.all(list.map(a => setDoc(doc(db, COLL, String(a.id)), sanitizeForFirestore(a))));
+  } catch (e) {
+    console.warn("Erro ao salvar tudo no Firestore:", e);
+  }
+}
+
+/** Remove campos undefined que o Firestore não aceita. */
+function sanitizeForFirestore(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
 
 
 /* ── SPOTIFY API (PKCE — sem secret, seguro no browser) ─────── */
 
 const SPOTIFY_CLIENT_ID = 'c8de8dbc0c824f88bf94b42ce58e38ce';
-// Redirect URI cadastrado no Spotify Developer Dashboard
 const SPOTIFY_REDIRECT  = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? location.origin + location.pathname
   : 'https://mvmntdinc.github.io/artistasnarua/';
@@ -30,7 +107,6 @@ async function generatePKCE() {
 
 /**
  * Inicia o fluxo PKCE — redireciona para o Spotify autorizar.
- * Após autorização, o Spotify redireciona de volta com ?code=...
  */
 async function startSpotifyAuth() {
   const { verifier, challenge } = await generatePKCE();
@@ -56,7 +132,6 @@ async function handleSpotifyCallback() {
   const verifier = sessionStorage.getItem('sp_verifier');
   if (!code || !verifier) return;
 
-  // Limpa a URL sem recarregar
   history.replaceState({}, '', location.pathname);
 
   const res = await fetch('https://accounts.spotify.com/api/token', {
@@ -81,41 +156,28 @@ async function handleSpotifyCallback() {
   showToast('✓ Spotify conectado!');
 }
 
-/**
- * Retorna token válido ou inicia autenticação.
- */
+/** Retorna token válido ou inicia autenticação. */
 async function getSpotifyToken() {
   if (spotifyToken && Date.now() < spotifyTokenExp) return spotifyToken;
-  // Token expirado ou inexistente — precisa logar
   await startSpotifyAuth();
-  return null; // nunca chega aqui (redirect acontece)
+  return null;
 }
 
 /**
  * Busca um artista no Spotify pelo nome.
- * Retorna o primeiro resultado com: id, nome, seguidores, popularidade, imagem.
- *
- * @param {string} query — nome do artista
- * @returns {object|null}
  */
 async function searchSpotifyArtist(query) {
   const token = await getSpotifyToken();
   const url   = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&market=BR&limit=5`;
-
-  const res  = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  const data = await res.json();
+  const res   = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  const data  = await res.json();
   const items = data?.artists?.items;
   if (!items?.length) return null;
-
-  // Prioriza artistas brasileiros ou o primeiro resultado
   return items[0];
 }
 
 /**
  * Busca as top tracks de um artista no BR.
- * Retorna array de { nome, popularidade, preview_url }
- *
- * @param {string} artistId — Spotify artist ID
  */
 async function getTopTracks(artistId) {
   const token = await getSpotifyToken();
@@ -123,16 +185,15 @@ async function getTopTracks(artistId) {
   const res   = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
   const data  = await res.json();
   return (data.tracks || []).slice(0, 5).map(t => ({
-    nome:        t.name,
+    nome:         t.name,
     popularidade: t.popularity,
-    preview:     t.preview_url,
-    album:       t.album?.name,
+    preview:      t.preview_url,
+    album:        t.album?.name,
   }));
 }
 
 /**
- * Botão "Buscar no Spotify" — preenche automaticamente os campos do formulário.
- * Chamado pelo onclick no HTML.
+ * Botão "Buscar no Spotify" — preenche os campos do formulário automaticamente.
  */
 async function fetchSpotify() {
   const nome = document.getElementById('f-nome').value.trim();
@@ -144,20 +205,14 @@ async function fetchSpotify() {
 
   try {
     const artist = await searchSpotifyArtist(nome);
-    if (!artist) {
-      showToast('Artista não encontrado no Spotify', 2500);
-      return;
-    }
+    if (!artist) { showToast('Artista não encontrado no Spotify', 2500); return; }
 
-    // Preenche campos automaticamente
     document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
     document.getElementById('f-pop').value       = artist.popularity      || 0;
     document.getElementById('f-spot-id').value   = artist.id;
 
-    // Busca top tracks
     const tracks = await getTopTracks(artist.id);
     renderTopTracks(tracks, artist);
-
     showToast(`✓ ${artist.name} encontrado — ${fmtN(artist.followers?.total || 0)} seguidores`);
   } catch (e) {
     console.error(e);
@@ -168,9 +223,7 @@ async function fetchSpotify() {
   }
 }
 
-/**
- * Renderiza o painel de top tracks abaixo do botão de busca.
- */
+/** Renderiza painel de top tracks abaixo do botão de busca. */
 function renderTopTracks(tracks, artist) {
   const wrap = document.getElementById('spotify-preview');
   if (!tracks.length) { wrap.innerHTML = ''; return; }
@@ -198,12 +251,12 @@ function renderTopTracks(tracks, artist) {
 }
 
 
-/* ── PERSISTÊNCIA (localStorage) ───────────────────────────── */
+/* ── PERSISTÊNCIA ───────────────────────────────────────────── */
 
 const STORAGE_KEY = 'narua_artists_v1';
 const NEXTID_KEY  = 'narua_nextid_v1';
 
-/** Artistas padrão carregados na primeira vez (demo) */
+/** Artistas de exemplo carregados na primeira vez */
 const DEFAULT_ARTISTS = [
   { id: 1,  nome: "MC Exemplo A", seg: 8200,  eng: 5.8, reels: 22, spotify: 1200, freq: 4, comp: true,  colab: false, niche: "funk", tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [] },
   { id: 2,  nome: "Trap RJ B",    seg: 14500, eng: 3.1, reels: 9,  spotify: 3400, freq: 2, comp: false, colab: false, niche: "trap", tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [] },
@@ -219,29 +272,36 @@ const DEFAULT_ARTISTS = [
   { id: 12, nome: "Trap L",       seg: 37000, eng: 3.8, reels: 16, spotify: 6200, freq: 2, comp: false, colab: false, niche: "trap", tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [] },
 ];
 
-function loadArtists() {
+/** Carrega do localStorage (fallback). */
+function loadLocalArtists() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return DEFAULT_ARTISTS;
-    // Migração: garante campos novos em artistas antigos
     return JSON.parse(saved).map(a => ({
-      tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [],
-      ...a,
+      tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [], ...a,
     }));
-  } catch (e) {
-    return DEFAULT_ARTISTS;
-  }
+  } catch { return DEFAULT_ARTISTS; }
 }
 
-function saveArtists() {
+/** Salva no localStorage (fallback / cache). */
+function saveLocal() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(artists));
     localStorage.setItem(NEXTID_KEY,  String(nextId));
-  } catch (e) {
-    console.warn('Erro ao salvar:', e);
-  }
+  } catch (e) { console.warn('Erro ao salvar localStorage:', e); }
 }
 
+/**
+ * saveArtists — salva no Firestore (principal) e localStorage (cache).
+ * Recebe o artista modificado para evitar reescrever tudo no Firestore.
+ * Se artistaModificado não for passado, salva tudo localmente apenas.
+ */
+function saveArtists(artistaModificado) {
+  saveLocal();
+  if (artistaModificado) dbSave(artistaModificado);
+}
+
+/** Exporta a lista como arquivo JSON. */
 function exportJSON() {
   const data = JSON.stringify({ artists, nextId }, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
@@ -251,6 +311,7 @@ function exportJSON() {
   URL.revokeObjectURL(url);
 }
 
+/** Importa a lista a partir de um arquivo JSON. */
 function importJSON() {
   const input = document.createElement('input');
   input.type = 'file'; input.accept = '.json';
@@ -258,14 +319,17 @@ function importJSON() {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
         if (!Array.isArray(data.artists)) throw new Error('inválido');
         artists = data.artists.map(a => ({ tiktok: 0, streams28: 0, ouvintes28: 0, ddChecklist: [], ...a }));
         nextId  = data.nextId || (Math.max(...artists.map(a => a.id)) + 1);
-        saveArtists(); render();
-        showToast(`✓ ${artists.length} artistas importados`);
+        saveLocal();
+        showToast('⟳ Sincronizando com Firestore...', 2000);
+        await dbSaveAll(artists);
+        render();
+        showToast(`✓ ${artists.length} artistas importados e salvos na nuvem`);
       } catch { alert('Arquivo inválido. Use um JSON exportado por este dashboard.'); }
     };
     reader.readAsText(file);
@@ -276,23 +340,14 @@ function importJSON() {
 
 /* ── DADOS INICIAIS ─────────────────────────────────────────── */
 
-/**
- * Campos do artista:
- *   id, nome, seg, eng, reels, spotify, freq, comp, colab, niche
- *   — campos públicos (triagem)
- *
- *   tiktok      — seguidores no TikTok
- *   streams28   — streams nos últimos 28 dias (Spotify for Artists)
- *   ouvintes28  — ouvintes únicos nos últimos 28 dias
- *   ddChecklist — itens de due diligence já coletados
- */
-let artists  = loadArtists();
+let artists  = loadLocalArtists(); // substituído pelo Firestore após init
 let nextId   = parseInt(localStorage.getItem(NEXTID_KEY) || '13');
 let formOpen = true;
 
 let cfg = {
   eng: 3, reels: 15, spotify: 500, freq: 2, segmin: 5, segmax: 50,
 };
+
 
 /* ── CHECKLIST DE DUE DILIGENCE ─────────────────────────────── */
 
@@ -304,9 +359,7 @@ const DD_ITEMS = [
   { key: 'contrato', label: 'Assinou carta de intenção'        },
 ];
 
-/**
- * Abre o modal de due diligence de um artista.
- */
+/** Abre o modal de due diligence de um artista. */
 function openDD(id) {
   const a = artists.find(x => x.id === id);
   if (!a) return;
@@ -337,7 +390,6 @@ function openDD(id) {
       </label>`;
   }).join('');
 
-  const modal = document.getElementById('dd-modal');
   document.getElementById('dd-title').textContent = `Due Diligence — ${a.nome}`;
   document.getElementById('dd-body').innerHTML = `
 
@@ -385,16 +437,15 @@ function openDD(id) {
     </div>
   `;
 
-  modal.style.display = 'flex';
+  document.getElementById('dd-modal').style.display = 'flex';
 }
 
-/** Atualiza campo de due diligence e recalcula ratio ao vivo */
+/** Atualiza campo de due diligence e recalcula ratio ao vivo. */
 function updateDD(id, field, value) {
   const a = artists.find(x => x.id === id);
   if (!a) return;
   a[field] = parseFloat(value) || 0;
 
-  // Atualiza ratio ao vivo
   if (field === 'streams28' || field === 'ouvintes28') {
     const ratio = a.streams28 && a.ouvintes28
       ? (a.streams28 / a.ouvintes28).toFixed(1)
@@ -403,37 +454,32 @@ function updateDD(id, field, value) {
     if (el) {
       const c = !ratio ? 'var(--gray2)' : ratio >= 10 ? 'var(--green)' : ratio >= 4 ? 'var(--amber)' : 'var(--red)';
       const l = !ratio ? '—' : ratio >= 10 ? `${ratio} 🔥 Fã real` : ratio >= 4 ? `${ratio} ✓ OK` : `${ratio} ⚠ Baixo`;
-      el.style.color   = c;
-      el.textContent   = l;
+      el.style.color = c;
+      el.textContent = l;
     }
   }
 
-  saveArtists();
+  saveArtists(a);
 }
 
-/** Marca/desmarca item do checklist de due diligence */
+/** Marca/desmarca item do checklist de due diligence. */
 function toggleDD(id, key, checked) {
   const a = artists.find(x => x.id === id);
   if (!a) return;
   a.ddChecklist = a.ddChecklist || [];
   if (checked) { if (!a.ddChecklist.includes(key)) a.ddChecklist.push(key); }
   else         { a.ddChecklist = a.ddChecklist.filter(k => k !== key); }
-  saveArtists();
+  saveArtists(a);
 }
 
 function closeDD() {
   document.getElementById('dd-modal').style.display = 'none';
-  render(); // atualiza score/cards com novos dados
+  render();
 }
 
 
 /* ── ALGORITMO DE SCORE ─────────────────────────────────────── */
 
-/**
- * Calcula o score de 0–100.
- * Agora inclui bônus se ratio streams/ouvintes for alto
- * e se TikTok tiver presença.
- */
 function calcScore(a) {
   let s = 0;
 
@@ -468,7 +514,7 @@ function calcScore(a) {
     const ratio = a.streams28 / a.ouvintes28;
     if      (ratio >= 10) s += 10;
     else if (ratio >= 5)  s += 5;
-    else if (ratio < 2)   s -= 5; // penalidade se ratio baixo
+    else if (ratio < 2)   s -= 5;
   }
 
   // Bônus TikTok
@@ -489,13 +535,8 @@ function barColor(t) {
   return t === 'ideal' ? 'var(--green)' : t === 'ok' ? 'var(--amber)' : 'var(--red)';
 }
 
-function fmtN(n) {
-  return n >= 1000 ? (n / 1000).toFixed(0) + 'K' : String(n);
-}
-
-function fmtS(n) {
-  return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n);
-}
+function fmtN(n) { return n >= 1000 ? (n / 1000).toFixed(0) + 'K' : String(n); }
+function fmtS(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n); }
 
 function ddProgress(a) {
   const done  = (a.ddChecklist || []).length;
@@ -553,27 +594,29 @@ function toggleForm() {
   ch.className   = 'add-chevron' + (formOpen ? ' open' : '');
 }
 
-function addArtist() {
+async function addArtist() {
   const nome = document.getElementById('f-nome').value.trim();
   if (!nome) { alert('Coloca o nome do artista!'); return; }
 
-  artists.push({
-    id:       nextId++,
+  const novoArtista = {
+    id:          nextId++,
     nome,
-    seg:      parseInt(document.getElementById('f-seg').value)     || 0,
-    eng:      parseFloat(document.getElementById('f-eng').value)   || 0,
-    reels:    parseFloat(document.getElementById('f-reels').value) || 0,
-    spotify:  parseInt(document.getElementById('f-spotify').value) || 0,
-    freq:     parseInt(document.getElementById('f-freq').value)    || 0,
-    niche:    document.getElementById('f-niche').value,
-    comp:     document.getElementById('f-comp').checked,
-    colab:    document.getElementById('f-colab').checked,
-    tiktok:   parseInt(document.getElementById('f-tiktok').value)  || 0,
-    streams28:  0,
-    ouvintes28: 0,
+    seg:         parseInt(document.getElementById('f-seg').value)     || 0,
+    eng:         parseFloat(document.getElementById('f-eng').value)   || 0,
+    reels:       parseFloat(document.getElementById('f-reels').value) || 0,
+    spotify:     parseInt(document.getElementById('f-spotify').value) || 0,
+    freq:        parseInt(document.getElementById('f-freq').value)    || 0,
+    niche:       document.getElementById('f-niche').value,
+    comp:        document.getElementById('f-comp').checked,
+    colab:       document.getElementById('f-colab').checked,
+    tiktok:      parseInt(document.getElementById('f-tiktok').value)  || 0,
+    streams28:   0,
+    ouvintes28:  0,
     ddChecklist: [],
-    spotifyId: document.getElementById('f-spot-id').value || '',
-  });
+    spotifyId:   document.getElementById('f-spot-id').value || '',
+  };
+
+  artists.push(novoArtista);
 
   ['f-nome','f-seg','f-eng','f-reels','f-spotify','f-freq','f-tiktok','f-spot-id','f-seg-spot','f-pop']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -581,18 +624,28 @@ function addArtist() {
   document.getElementById('f-colab').checked = false;
   document.getElementById('spotify-preview').innerHTML = '';
 
-  saveArtists(); render();
-  showToast('✓ Artista salvo');
+  saveLocal();
+  showToast('⟳ Salvando na nuvem...', 1500);
+  await dbSave(novoArtista);
+  render();
+  showToast('✓ Artista salvo na nuvem ☁');
 }
 
-function deleteArtist(id) {
+async function deleteArtist(id) {
   artists = artists.filter(a => a.id !== id);
-  saveArtists(); render();
+  saveLocal();
+  await dbDelete(id);
+  render();
+  showToast('Artista removido');
 }
 
-function clearAll() {
+async function clearAll() {
   if (confirm('Remover todos os artistas cadastrados?')) {
-    artists = []; saveArtists(); render();
+    const ids = artists.map(a => a.id);
+    artists = [];
+    saveLocal();
+    await Promise.all(ids.map(id => dbDelete(id)));
+    render();
   }
 }
 
@@ -639,7 +692,7 @@ function render() {
   `;
 
   // Ideal banner
-  const excChip  = excComp ? `<span class="ib-chip danger">Sem <b>audiência comprada</b></span>` : '';
+  const excChip   = excComp ? `<span class="ib-chip danger">Sem <b>audiência comprada</b></span>` : '';
   const spotLabel = cfg.spotify >= 1000 ? (cfg.spotify/1000).toFixed(1)+'K' : cfg.spotify;
   document.getElementById('ideal-banner').innerHTML = `
     <div class="ib-label">Perfil que você está buscando agora</div>
@@ -688,8 +741,8 @@ function buildCard(a) {
     warns.push('⚠ Ratio baixo');
 
   const goods = [];
-  if (a.colab)        goods.push('✓ Já colaborou');
-  if (a.eng >= 6)     goods.push('✓ Engaj. excelente');
+  if (a.colab)           goods.push('✓ Já colaborou');
+  if (a.eng >= 6)        goods.push('✓ Engaj. excelente');
   if (a.spotify >= 3000) goods.push('✓ Spotify sólido');
   if (a.streams28 && a.ouvintes28 && (a.streams28 / a.ouvintes28) >= 10)
     goods.push('✓ Fã real');
@@ -699,8 +752,7 @@ function buildCard(a) {
   const sB = Math.min(100, Math.round(a.spotify / 10000 * 100));
   const fB = Math.min(100, Math.round(a.freq / 7 * 100));
 
-  // Due diligence progress bar
-  const dd = ddProgress(a);
+  const dd     = ddProgress(a);
   const hasRatio = a.streams28 && a.ouvintes28;
   const ratio    = hasRatio ? (a.streams28 / a.ouvintes28).toFixed(1) : null;
   const ratioC   = !ratio ? 'var(--gray3)' : ratio >= 10 ? 'var(--green)' : ratio >= 4 ? 'var(--amber)' : 'var(--red)';
@@ -797,11 +849,47 @@ function showToast(msg, ms = 2500) {
 }
 
 
+/* ── EXPÕE FUNÇÕES PARA O HTML (onclick=) ────────────────────── */
+// Como o script usa "type=module", as funções não ficam no escopo global
+// automaticamente. Precisamos expô-las manualmente via window.
+
+window.fetchSpotify  = fetchSpotify;
+window.exportJSON    = exportJSON;
+window.importJSON    = importJSON;
+window.toggleForm    = toggleForm;
+window.addArtist     = addArtist;
+window.deleteArtist  = deleteArtist;
+window.clearAll      = clearAll;
+window.sf            = sf;
+window.sfSpot        = sfSpot;
+window.openDD        = openDD;
+window.closeDD       = closeDD;
+window.updateDD      = updateDD;
+window.toggleDD      = toggleDD;
+window.render        = render;
+
+
 /* ── INIT ───────────────────────────────────────────────────── */
 
-// Processa callback do Spotify se vier com ?code=
-if (location.search.includes('code=')) {
-  handleSpotifyCallback().then(render);
-} else {
+async function init() {
+  // Mostra dados do localStorage imediatamente (sem piscar)
   render();
+
+  // Tenta carregar do Firestore em paralelo
+  const fbArtists = await dbLoad();
+  if (fbArtists && fbArtists.length > 0) {
+    artists = fbArtists;
+    nextId  = Math.max(...artists.map(a => a.id)) + 1;
+    saveLocal(); // atualiza o cache local
+    render();    // re-renderiza com dados da nuvem
+    showToast(`☁ ${artists.length} artistas carregados da nuvem`);
+  }
+
+  // Processa callback do Spotify se vier com ?code=
+  if (location.search.includes('code=')) {
+    await handleSpotifyCallback();
+    render();
+  }
 }
+
+init();
