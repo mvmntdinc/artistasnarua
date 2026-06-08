@@ -89,8 +89,9 @@ const SPOTIFY_REDIRECT  = location.hostname === 'localhost' || location.hostname
   ? location.origin + location.pathname
   : 'https://mvmntdinc.github.io/artistasnarua/';
 
-let spotifyToken    = localStorage.getItem('sp_token')    || null;
+let spotifyToken    = localStorage.getItem('sp_token')   || null;
 let spotifyTokenExp = parseInt(localStorage.getItem('sp_exp') || '0');
+let _refreshingToken = false; // evita chamadas paralelas de refresh
 
 /* ── PKCE helpers ─────────────────────────────────────────── */
 function b64url(buf) {
@@ -150,33 +151,149 @@ async function handleSpotifyCallback() {
   const data = await res.json();
   spotifyToken    = data.access_token;
   spotifyTokenExp = Date.now() + (data.expires_in - 60) * 1000;
-  localStorage.setItem('sp_token', spotifyToken);
-  localStorage.setItem('sp_exp',   String(spotifyTokenExp));
+  localStorage.setItem('sp_token',   spotifyToken);
+  localStorage.setItem('sp_exp',     String(spotifyTokenExp));
+  if (data.refresh_token) {
+    localStorage.setItem('sp_refresh', data.refresh_token);
+  }
   sessionStorage.removeItem('sp_verifier');
   showToast('✓ Spotify conectado!');
 }
 
-/** Retorna token válido ou força re-autenticação com aviso claro. */
+/** Retorna token válido. Renova via refresh token se expirado. */
 async function getSpotifyToken() {
+  // Token ainda válido
   if (spotifyToken && Date.now() < spotifyTokenExp) return spotifyToken;
-  // Token expirado — limpa e pede novo login
-  localStorage.removeItem('sp_token');
-  localStorage.removeItem('sp_exp');
-  spotifyToken    = null;
-  spotifyTokenExp = 0;
-  showToast('🔄 Sessão expirada — reconectando ao Spotify...', 2000);
-  await new Promise(r => setTimeout(r, 1500)); // mostra o toast antes de redirecionar
-  await startSpotifyAuth();
-  return null;
+
+  // Evita chamadas paralelas de refresh
+  if (_refreshingToken) {
+    await new Promise(r => setTimeout(r, 800));
+    return spotifyToken;
+  }
+  _refreshingToken = true;
+
+  try {
+    // 1ª tentativa: refresh token (Spotify PKCE com offline_access)
+    const refreshToken = localStorage.getItem('sp_refresh');
+    if (refreshToken) {
+      const res = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type:    'refresh_token',
+          refresh_token: refreshToken,
+          client_id:     SPOTIFY_CLIENT_ID,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        spotifyToken    = data.access_token;
+        spotifyTokenExp = Date.now() + (data.expires_in - 60) * 1000;
+        localStorage.setItem('sp_token', spotifyToken);
+        localStorage.setItem('sp_exp',   String(spotifyTokenExp));
+        if (data.refresh_token) localStorage.setItem('sp_refresh', data.refresh_token);
+        console.log('[Spotify] Token renovado via refresh_token ✓');
+        return spotifyToken;
+      }
+      console.warn('[Spotify] refresh_token falhou, vai pedir novo login');
+    }
+
+    // 2ª tentativa: popup silencioso (evita redirecionar a página)
+    const newToken = await silentSpotifyAuth();
+    if (newToken) return newToken;
+
+    // Último recurso: redirect normal
+    showToast('🔄 Reconectando ao Spotify...', 2000);
+    await new Promise(r => setTimeout(r, 1500));
+    await startSpotifyAuth();
+    return null;
+
+  } finally {
+    _refreshingToken = false;
+  }
+}
+
+/**
+ * Abre uma janela popup para re-auth sem sair da página.
+ * Retorna o novo token se funcionar, ou null.
+ */
+async function silentSpotifyAuth() {
+  return new Promise(async (resolve) => {
+    const { verifier, challenge } = await generatePKCE();
+    sessionStorage.setItem('sp_verifier', verifier);
+
+    const params = new URLSearchParams({
+      client_id:             SPOTIFY_CLIENT_ID,
+      response_type:         'code',
+      redirect_uri:          SPOTIFY_REDIRECT,
+      scope:                 'user-read-private',
+      code_challenge_method: 'S256',
+      code_challenge:        challenge,
+    });
+
+    const popup = window.open(
+      'https://accounts.spotify.com/authorize?' + params,
+      'spotify_auth',
+      'width=500,height=650,left=200,top=100'
+    );
+
+    if (!popup) { resolve(null); return; }
+
+    // Monitora o popup até ele redirecionar de volta com ?code=
+    const check = setInterval(async () => {
+      try {
+        const popupUrl = popup.location.href;
+        if (popupUrl.includes('code=')) {
+          clearInterval(check);
+          const code = new URL(popupUrl).searchParams.get('code');
+          popup.close();
+
+          // Troca o code por token
+          const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              grant_type:    'authorization_code',
+              code,
+              redirect_uri:  SPOTIFY_REDIRECT,
+              client_id:     SPOTIFY_CLIENT_ID,
+              code_verifier: verifier,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            spotifyToken    = data.access_token;
+            spotifyTokenExp = Date.now() + (data.expires_in - 60) * 1000;
+            localStorage.setItem('sp_token',   spotifyToken);
+            localStorage.setItem('sp_exp',     String(spotifyTokenExp));
+            if (data.refresh_token) localStorage.setItem('sp_refresh', data.refresh_token);
+            sessionStorage.removeItem('sp_verifier');
+            showToast('✓ Spotify reconectado!');
+            resolve(spotifyToken);
+          } else {
+            resolve(null);
+          }
+        }
+      } catch {
+        // popup ainda em accounts.spotify.com — normal, aguarda
+      }
+      if (popup.closed) { clearInterval(check); resolve(null); }
+    }, 500);
+
+    // Timeout de 2 minutos
+    setTimeout(() => { clearInterval(check); popup.close(); resolve(null); }, 120000);
+  });
 }
 
 /**
  * Busca um artista no Spotify pelo nome.
  */
-async function searchSpotifyArtist(query) {
+async function searchSpotifyArtist(queryText) {
   const token = await getSpotifyToken();
-  const url   = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&market=BR&limit=5`;
+  if (!token) return null;
+  const url   = `https://api.spotify.com/v1/search?q=${encodeURIComponent(queryText)}&type=artist&market=BR&limit=5`;
   const res   = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) return null;
   const data  = await res.json();
   const items = data?.artists?.items;
   if (!items?.length) return null;
@@ -184,23 +301,11 @@ async function searchSpotifyArtist(query) {
 }
 
 /**
- * Busca as top tracks de um artista no BR.
- * Retorna array vazio se falhar (não quebra o fluxo).
+ * Top tracks desativado — endpoint /top-tracks retorna 403
+ * na maioria das contas. Retorna sempre array vazio.
  */
-async function getTopTracks(artistId) {
-  try {
-    const token = await getSpotifyToken();
-    const url   = `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=BR`;
-    const res   = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-    if (!res.ok) return []; // 403 ou outro erro — ignora silenciosamente
-    const data  = await res.json();
-    return (data.tracks || []).slice(0, 5).map(t => ({
-      nome:         t.name,
-      popularidade: t.popularity,
-      preview:      t.preview_url,
-      album:        t.album?.name,
-    }));
-  } catch { return []; }
+async function getTopTracks(_artistId) {
+  return [];
 }
 
 /**
