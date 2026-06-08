@@ -357,19 +357,18 @@ async function fetchSpotify() {
       preencherArtista(artist);
     } else {
       // Texto digitado — retorna lista para escolher
+      const token = await getSpotifyToken();
+      if (!token) { showToast('⚠ Reconecte ao Spotify primeiro', 3000); return; }
       const results = await searchSpotifyArtists(input);
-      if (!results.length) { showToast('Nenhum artista encontrado', 2500); return; }
-      if (results.length === 1) {
-        preencherArtista(results[0]);
-      } else {
-        renderSearchDropdown(results);
-      }
+      if (!results.length) { showToast('Nenhum artista encontrado. Tente o nome exato.', 2500); return; }
+      // Sempre mostra dropdown, mesmo com 1 resultado — pra confirmar
+      renderSearchDropdown(results);
     }
   } catch (e) {
-    console.error(e);
-    showToast('Erro ao buscar no Spotify. Tente de novo.', 3000);
+    console.error('fetchSpotify erro:', e);
+    showToast('Erro: ' + e.message, 3000);
   } finally {
-    btn.textContent = '🔍 Buscar no Spotify';
+    btn.textContent = '🔍 Buscar';
     btn.disabled    = false;
   }
 }
