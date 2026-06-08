@@ -286,18 +286,16 @@ async function silentSpotifyAuth() {
 }
 
 /**
- * Busca um artista no Spotify pelo nome.
+ * Busca artistas no Spotify pelo nome — retorna até 5 resultados.
  */
-async function searchSpotifyArtist(queryText) {
+async function searchSpotifyArtists(queryText) {
   const token = await getSpotifyToken();
-  if (!token) return null;
-  const url   = `https://api.spotify.com/v1/search?q=${encodeURIComponent(queryText)}&type=artist&market=BR&limit=5`;
-  const res   = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) return null;
-  const data  = await res.json();
-  const items = data?.artists?.items;
-  if (!items?.length) return null;
-  return items[0];
+  if (!token) return [];
+  const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(queryText)}&type=artist&market=BR&limit=5`;
+  const res  = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data?.artists?.items || [];
 }
 
 /**
@@ -324,104 +322,129 @@ function extractSpotifyId(input) {
 
 async function fetchSpotify() {
   const input = document.getElementById('f-nome').value.trim();
-  if (!input) { showToast('⚠ Cola o link do Spotify do artista', 2000); return; }
+  if (!input) { showToast('⚠ Cola o link do Spotify ou nome do artista', 2000); return; }
 
   const btn = document.getElementById('btn-spotify');
   btn.textContent = '⟳ Buscando...';
   btn.disabled    = true;
 
   try {
-    let artist;
     const artistId = extractSpotifyId(input);
 
     if (artistId) {
-      // URL colado — busca direto pelo ID
+      // URL colado — busca direto pelo ID, sem dropdown
       const token = await getSpotifyToken();
-      const res   = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
+      if (!token) return;
+      const res = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
         headers: { Authorization: 'Bearer ' + token }
       });
       if (!res.ok) throw new Error('Artista não encontrado');
-      artist = await res.json();
+      const artist = await res.json();
+      preencherArtista(artist);
     } else {
-      // Texto digitado — busca por nome (fallback)
-      artist = await searchSpotifyArtist(input);
-    }
-
-    if (!artist) { showToast('Artista não encontrado no Spotify', 2500); return; }
-
-    // ── Campos ocultos (internos) ────────────────────────────
-    document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
-    document.getElementById('f-pop').value       = artist.popularity      || 0;
-    document.getElementById('f-spot-id').value   = artist.id;
-
-    // ── Campos visíveis preenchidos automaticamente ──────────
-
-    // Nome
-    document.getElementById('f-nome').value = artist.name;
-
-    // Seguidores Spotify → campo "Ouvintes Spotify/mês"
-    // (followers é o dado mais confiável que a API entrega)
-    const followers = artist.followers?.total || 0;
-    document.getElementById('f-spotify').value = followers;
-
-    // Nicho → baseado no primeiro gênero do Spotify
-    const genreMap = {
-      funk: 'funk', trap: 'trap', rap: 'rap', 'hip hop': 'rap',
-      'hip-hop': 'rap', 'r&b': 'rb', 'soul': 'rb', reggae: 'outro',
-      sertanejo: 'outro', pagode: 'outro', axe: 'outro',
-    };
-    const genres = artist.genres || [];
-    let nichoDetectado = 'outro';
-    for (const g of genres) {
-      const gLower = g.toLowerCase();
-      for (const [key, val] of Object.entries(genreMap)) {
-        if (gLower.includes(key)) { nichoDetectado = val; break; }
+      // Texto digitado — retorna lista para escolher
+      const results = await searchSpotifyArtists(input);
+      if (!results.length) { showToast('Nenhum artista encontrado', 2500); return; }
+      if (results.length === 1) {
+        preencherArtista(results[0]);
+      } else {
+        renderSearchDropdown(results);
       }
-      if (nichoDetectado !== 'outro') break;
     }
-    document.getElementById('f-niche').value = nichoDetectado;
-
-    // Busca top tracks
-    const tracks = await getTopTracks(artist.id);
-    renderTopTracks(tracks, artist);
-
-    const genreStr = genres.slice(0, 2).join(', ') || 'gênero não identificado';
-    showToast(`✓ ${artist.name} · ${fmtN(followers)} seguidores · ${genreStr}`);
   } catch (e) {
     console.error(e);
-    showToast('Erro ao buscar no Spotify. Verifique as credenciais.', 3000);
+    showToast('Erro ao buscar no Spotify. Tente de novo.', 3000);
   } finally {
     btn.textContent = '🔍 Buscar no Spotify';
     btn.disabled    = false;
   }
 }
 
-/** Renderiza painel de top tracks abaixo do botão de busca. */
-function renderTopTracks(tracks, artist) {
+/** Preenche o formulário com os dados de um artista escolhido. */
+function preencherArtista(artist) {
+  document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
+  document.getElementById('f-pop').value       = artist.popularity      || 0;
+  document.getElementById('f-spot-id').value   = artist.id;
+  document.getElementById('f-nome').value      = artist.name;
+
+  const followers = artist.followers?.total || 0;
+  document.getElementById('f-spotify').value = followers;
+
+  const genreMap = {
+    funk: 'funk', trap: 'trap', rap: 'rap', 'hip hop': 'rap',
+    'hip-hop': 'rap', 'r&b': 'rb', 'soul': 'rb', reggae: 'outro',
+    sertanejo: 'outro', pagode: 'outro', axe: 'outro',
+  };
+  const genres = artist.genres || [];
+  let nichoDetectado = 'outro';
+  for (const g of genres) {
+    const gLower = g.toLowerCase();
+    for (const [key, val] of Object.entries(genreMap)) {
+      if (gLower.includes(key)) { nichoDetectado = val; break; }
+    }
+    if (nichoDetectado !== 'outro') break;
+  }
+  document.getElementById('f-niche').value = nichoDetectado;
+
+  // Mostra preview do artista confirmado
+  renderArtistPreview(artist);
+
+  const genreStr = genres.slice(0, 2).join(', ') || 'gênero não identificado';
+  showToast(`✓ ${artist.name} · ${fmtN(followers)} seguidores · ${genreStr}`);
+}
+
+window.preencherArtista = preencherArtista;
+
+/** Renderiza dropdown para escolher entre múltiplos resultados. */
+function renderSearchDropdown(results) {
   const wrap = document.getElementById('spotify-preview');
-  if (!tracks.length) { wrap.innerHTML = ''; return; }
-
-  const img = artist.images?.[0]?.url
-    ? `<img src="${artist.images[0].url}" alt="${artist.name}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;">`
-    : '';
-
   wrap.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-      ${img}
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--white)">${artist.name}</div>
-        <div style="font-size:11px;color:var(--gray2)">${fmtN(artist.followers?.total||0)} seguidores · Popularidade: ${artist.popularity}/100</div>
-      </div>
+    <div style="margin-bottom:8px;font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;">
+      Vários artistas encontrados — escolha o certo:
     </div>
-    <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Top 5 músicas no Brasil</div>
-    ${tracks.map((t, i) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">
-        <span style="font-family:var(--mono);font-size:10px;color:var(--gray3);width:14px">${i+1}</span>
-        <div style="flex:1;font-size:12px;color:var(--gray1)">${t.nome}</div>
-        <div style="font-size:10px;font-family:var(--mono);color:${t.popularidade>=60?'var(--green)':t.popularidade>=40?'var(--amber)':'var(--gray2)'}">${t.popularidade}</div>
-      </div>`).join('')}
+    ${results.map((a, i) => {
+      const img = a.images?.[0]?.url
+        ? `<img src="${a.images[0].url}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;">`
+        : `<div style="width:40px;height:40px;border-radius:6px;background:var(--surface3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">🎵</div>`;
+      const followers = fmtN(a.followers?.total || 0);
+      const genre     = a.genres?.[0] || 'sem gênero';
+      return `
+        <div onclick="preencherArtista(${JSON.stringify(a).replace(/"/g, '&quot;')})"
+          style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;
+                 border:1px solid var(--border);background:var(--surface2);cursor:pointer;
+                 margin-bottom:6px;transition:border-color .15s,background .15s;"
+          onmouseover="this.style.borderColor='var(--gold)';this.style.background='var(--gold-bg)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface2)'">
+          ${img}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.name}</div>
+            <div style="font-size:11px;color:var(--gray2);">${followers} seguidores · ${genre}</div>
+          </div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--gold);flex-shrink:0;">Escolher →</div>
+        </div>`;
+    }).join('')}
   `;
 }
+
+/** Preview compacto do artista confirmado. */
+function renderArtistPreview(artist) {
+  const wrap = document.getElementById('spotify-preview');
+  const img  = artist.images?.[0]?.url
+    ? `<img src="${artist.images[0].url}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;">`
+    : '';
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;
+                border:1px solid var(--gold-dim);background:var(--gold-bg);">
+      ${img}
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--white);">✓ ${artist.name}</div>
+        <div style="font-size:11px;color:var(--gray2);">${fmtN(artist.followers?.total||0)} seguidores · Popularidade: ${artist.popularity}/100</div>
+        <div style="font-size:10px;color:var(--gold);margin-top:2px;">${(artist.genres||[]).slice(0,2).join(', ') || 'gênero não identificado'}</div>
+      </div>
+    </div>
+  `;
+}
+
 
 
 /* ── PERSISTÊNCIA ───────────────────────────────────────────── */
