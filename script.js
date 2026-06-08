@@ -207,13 +207,31 @@ async function fetchSpotify() {
     const artist = await searchSpotifyArtist(nome);
     if (!artist) { showToast('Artista não encontrado no Spotify', 2500); return; }
 
+    // Campos ocultos (internos)
     document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
     document.getElementById('f-pop').value       = artist.popularity      || 0;
     document.getElementById('f-spot-id').value   = artist.id;
 
+    // Preenche nome no formulário
+    document.getElementById('f-nome').value = artist.name;
+
+    // Estima ouvintes mensais com base na popularidade (0–100)
+    // A API de search não retorna monthly listeners diretamente
+    const pop = artist.popularity || 0;
+    const estimatedListeners =
+      pop >= 80 ? 5000000 :
+      pop >= 70 ? 1500000 :
+      pop >= 60 ? 500000  :
+      pop >= 50 ? 150000  :
+      pop >= 40 ? 50000   :
+      pop >= 30 ? 15000   :
+      pop >= 20 ? 5000    :
+      pop >= 10 ? 1500    : 500;
+    document.getElementById('f-spotify').value = estimatedListeners;
+
     const tracks = await getTopTracks(artist.id);
     renderTopTracks(tracks, artist);
-    showToast(`✓ ${artist.name} encontrado — ${fmtN(artist.followers?.total || 0)} seguidores`);
+    showToast(`✓ ${artist.name} encontrado · Popularidade: ${pop}/100`);
   } catch (e) {
     console.error(e);
     showToast('Erro ao buscar no Spotify. Verifique as credenciais.', 3000);
