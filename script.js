@@ -93,6 +93,8 @@ let spotifyToken    = localStorage.getItem('sp_token')   || null;
 let spotifyTokenExp = parseInt(localStorage.getItem('sp_exp') || '0');
 let _refreshingToken = false; // evita chamadas paralelas de refresh
 
+const _searchCache = {}; // cache de resultados de busca Spotify
+
 /* -- PKCE helpers ------------------------------------------- */
 function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)))
@@ -629,8 +631,6 @@ function importJSON() {
 let artists  = loadLocalArtists(); // substituído pelo Firestore após init
 let nextId   = parseInt(localStorage.getItem(NEXTID_KEY) || '13');
 
-// Cache dos resultados de busca -- evita JSON no onclick (quebra com caracteres especiais)
-const _searchCache = {};
 let formOpen = true;
 
 let cfg = {
