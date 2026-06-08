@@ -299,11 +299,25 @@ async function searchSpotifyArtists(queryText) {
 }
 
 /**
- * Top tracks desativado — endpoint /top-tracks retorna 403
- * na maioria das contas. Retorna sempre array vazio.
+ * Busca top tracks do artista no Brasil.
+ * Requer Spotify Premium — retorna array vazio se der 403.
  */
-async function getTopTracks(_artistId) {
-  return [];
+async function getTopTracks(artistId) {
+  const token = await getSpotifyToken();
+  if (!token) return [];
+  try {
+    const res = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=BR`,
+      { headers: { Authorization: 'Bearer ' + token } }
+    );
+    if (!res.ok) return []; // 403 = sem Premium ou sem permissão
+    const data = await res.json();
+    return (data.tracks || []).slice(0, 5).map(t => ({
+      nome:    t.name,
+      streams: t.popularity, // API pública não expõe streams reais — usa popularity (0-100) como proxy
+      id:      t.id,
+    }));
+  } catch { return []; }
 }
 
 /**
@@ -361,7 +375,7 @@ async function fetchSpotify() {
 }
 
 /** Preenche o formulário com os dados de um artista escolhido. */
-function preencherArtista(artist) {
+async function preencherArtista(artist) {
   // Campos ocultos
   document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
   document.getElementById('f-pop').value       = artist.popularity      || 0;
@@ -405,6 +419,49 @@ function preencherArtista(artist) {
 
   const genreStr = genres.slice(0, 2).join(', ') || 'gênero não identificado';
   showToast(`✓ ${artist.name} · Pop: ${artist.popularity}/100 · ${genreStr}`);
+
+  // Busca top tracks silenciosamente e renderiza campos de streams
+  renderTopTracksForm([]);  // mostra skeleton enquanto carrega
+  const tracks = await getTopTracks(artist.id);
+  renderTopTracksForm(tracks);
+}
+
+/**
+ * Renderiza no formulário as top músicas com campos de streams editáveis.
+ * O usuário preenche os streams reais quando o artista mandar o print.
+ */
+function renderTopTracksForm(tracks) {
+  const container = document.getElementById('f-top-tracks-wrap');
+  if (!container) return;
+
+  if (!tracks.length) {
+    container.innerHTML = `
+      <div style="font-size:11px;color:var(--gray2);padding:8px 0;">
+        ⟳ Buscando músicas no Spotify...
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="font-size:10px;color:var(--gray2);margin-bottom:8px;line-height:1.4;">
+      Top músicas encontradas no Spotify · <span style="color:var(--gold)">preencha os streams reais quando o artista mandar o print</span>
+    </div>
+    ${tracks.map((t, i) => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--gray2);width:14px;flex-shrink:0;">${i+1}.</span>
+        <span style="font-size:12px;color:var(--white);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${t.nome}">${t.nome}</span>
+        <div style="position:relative;flex-shrink:0;">
+          <input type="number"
+            id="f-track-streams-${i}"
+            data-track-nome="${t.nome.replace(/"/g,'')}"
+            placeholder="streams reais"
+            min="0"
+            style="width:130px;padding:4px 8px;font-size:11px;font-family:var(--mono);
+                   background:var(--surface3);border:1px solid var(--border);
+                   border-radius:6px;color:var(--white);outline:none;"/>
+        </div>
+      </div>`).join('')}
+  `;
 }
 
 window.preencherArtista = preencherArtista;
@@ -583,6 +640,22 @@ const DD_ITEMS = [
   { key: 'contrato', label: 'Assinou carta de intenção'        },
 ];
 
+/** Gera HTML do campo de média streams para a calculadora. */
+function calcMediaTop3Html(a, id) {
+  const top3     = (a.topTracks || []).filter(t => t.streams > 0).slice(0, 3);
+  const media    = top3.length ? Math.round(top3.reduce((s, t) => s + t.streams, 0) / top3.length) : 0;
+  const hint     = media
+    ? '<div style="font-size:10px;color:var(--green);margin-top:3px;">✓ Média top 3 músicas: ' + media.toLocaleString('pt-BR') + ' streams</div>'
+    : '<div style="font-size:10px;color:var(--gray2);margin-top:3px;">Preencha os streams no cadastro para auto-preencher</div>';
+  return '<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px;">'
+    + '<div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Média streams por música (top 3)</div>'
+    + '<input type="number" id="calc-streams" placeholder="ex: 50000" value="' + (media || '') + '"'
+    + ' oninput="calcFeat(' + id + ')"'
+    + ' style="width:100%;background:transparent;border:none;outline:none;font-size:20px;font-weight:700;font-family:var(--mono);color:var(--white);">'
+    + hint
+    + '</div>';
+}
+
 /** Abre o modal de due diligence de um artista. */
 function openDD(id) {
   const a = artists.find(x => x.id === id);
@@ -724,23 +797,9 @@ function openDD(id) {
       </div>
       <div style="padding:14px;background:var(--surface);">
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
-            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Streams/mês do artista</div>
-            <input type="number" id="calc-streams" placeholder="ex: 80000"
-              value="${a.streams28 ? Math.round(a.streams28 * 1.1) : ''}"
-              oninput="calcFeat(${id})"
-              style="width:100%;background:transparent;border:none;outline:none;font-size:16px;font-weight:700;font-family:var(--mono);color:var(--white);">
-          </div>
-          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
-            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Seus streams/mês</div>
-            <input type="number" id="calc-meus-streams" placeholder="ex: 50000"
-              oninput="calcFeat(${id})"
-              style="width:100%;background:transparent;border:none;outline:none;font-size:16px;font-weight:700;font-family:var(--mono);color:var(--white);">
-          </div>
-        </div>
+        ${calcMediaTop3Html(a, id)}
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
           <div style="background:var(--surface2);border-radius:8px;padding:10px;">
             <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Seu split %</div>
             <div style="display:flex;align-items:center;gap:6px;">
@@ -748,15 +807,6 @@ function openDD(id) {
                 oninput="calcFeat(${id});document.getElementById('calc-split-lbl').textContent=this.value+'%'"
                 style="flex:1;accent-color:var(--gold);">
               <span id="calc-split-lbl" style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--gold);min-width:32px;">50%</span>
-            </div>
-          </div>
-          <div style="background:var(--surface2);border-radius:8px;padding:10px;">
-            <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Taxa conversão %</div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <input type="range" id="calc-conv" min="5" max="50" step="5" value="20"
-                oninput="calcFeat(${id});document.getElementById('calc-conv-lbl').textContent=this.value+'%'"
-                style="flex:1;accent-color:var(--gold);">
-              <span id="calc-conv-lbl" style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--gold);min-width:32px;">20%</span>
             </div>
           </div>
           <div style="background:var(--surface2);border-radius:8px;padding:10px;">
@@ -787,60 +837,55 @@ function openDD(id) {
 
 /** Calcula retorno financeiro estimado do feat em tempo real. */
 function calcFeat(id) {
-  const streamsArtista  = parseFloat(document.getElementById('calc-streams')?.value)       || 0;
-  const streamsMeus     = parseFloat(document.getElementById('calc-meus-streams')?.value)  || 0;
-  const split           = parseFloat(document.getElementById('calc-split')?.value)         / 100 || 0.5;
-  const conv            = parseFloat(document.getElementById('calc-conv')?.value)          / 100 || 0.2;
-  const rate            = parseFloat(document.getElementById('calc-rate')?.value)          || 0.013;
-  const el              = document.getElementById(`calc-resultado-${id}`);
+  // Média streams das top 3 músicas do artista = base realista do feat
+  const mediaStreams = parseFloat(document.getElementById('calc-streams')?.value) || 0;
+  const split        = parseFloat(document.getElementById('calc-split')?.value)   / 100 || 0.5;
+  const rate         = parseFloat(document.getElementById('calc-rate')?.value)    || 0.013;
+  const el           = document.getElementById(`calc-resultado-${id}`);
   if (!el) return;
 
-  if (!streamsArtista && !streamsMeus) {
-    el.innerHTML = `<div style="font-size:11px;color:var(--gray2);">Preencha os streams acima para calcular</div>`;
+  if (!mediaStreams) {
+    el.innerHTML = `<div style="font-size:11px;color:var(--gray2);">Preencha a média de streams acima para calcular</div>`;
     return;
   }
 
-  // Streams gerados pelo feat
-  // Audiência do artista: conv% dos ouvintes dele vão ouvir o feat
-  // Audiência sua: 100% dos seus ouvintes já está exposto
-  const streamsDoArtista = streamsArtista * conv;
-  const streamsTotais    = streamsDoArtista + streamsMeus;
+  // Lógica: um feat bem feito atinge a média das músicas desse artista no mês 1
+  // Curva de decaimento realista da indústria
+  const m1 = mediaStreams;           // 100% — lançamento
+  const m2 = mediaStreams * 0.55;    //  55% — ainda quente
+  const m3 = mediaStreams * 0.30;    //  30% — esfriando
+  const m4 = mediaStreams * 0.18;    //  18%
+  const m5 = mediaStreams * 0.12;    //  12%
+  const m6 = mediaStreams * 0.08;    //   8% — cauda longa
+  const total6m = m1 + m2 + m3 + m4 + m5 + m6;
 
-  // Curva de decaimento: mês 1 = 100%, mês 2 = 60%, mês 3 = 35%, mês 6 = 15%
-  const m1 = streamsTotais;
-  const m2 = streamsTotais * 0.60;
-  const m3 = streamsTotais * 0.35;
-  const m6 = streamsTotais * 0.15;
-  const total6m = m1 + m2 + m3 + (streamsTotais * 0.25) + (streamsTotais * 0.20) + m6;
+  const rec  = (v) => (v * rate * split).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtK = (v) => v >= 1000 ? (v/1000).toFixed(0)+'K' : Math.round(v).toString();
 
-  const receitaMes = (v) => (v * rate * split).toFixed(2).replace('.', ',');
-  const receitaTotal = (total6m * rate * split).toFixed(2).replace('.', ',');
-  const fmtStr = (v) => v >= 1000 ? (v/1000).toFixed(0)+'K' : Math.round(v).toString();
-
-  const corMes1 = (m1 * rate * split) >= 500 ? 'var(--green)' : (m1 * rate * split) >= 100 ? 'var(--amber)' : 'var(--gray1)';
+  const r1 = m1 * rate * split;
+  const cor = r1 >= 500 ? 'var(--green)' : r1 >= 100 ? 'var(--amber)' : 'var(--gray1)';
 
   el.innerHTML = `
     <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">
-      Projeção — ${fmtStr(streamsTotais)} streams/mês · Split ${Math.round(split*100)}%
+      Projeção · Split ${Math.round(split*100)}% · Base: ${fmtK(mediaStreams)} streams/mês
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
-      ${[['Mês 1', m1, true], ['Mês 2', m2, false], ['Mês 3', m3, false], ['Mês 6', m6, false]].map(([label, str, destaque]) => `
-        <div style="background:${destaque?'var(--gold-bg)':'var(--surface3)'};border:1px solid ${destaque?'var(--gold-dim)':'var(--border)'};border-radius:7px;padding:8px;text-align:center;">
-          <div style="font-size:9px;color:var(--gray2);margin-bottom:3px;">${label}</div>
-          <div style="font-size:11px;font-family:var(--mono);color:var(--gray2);">${fmtStr(str)} str.</div>
-          <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:${destaque?corMes1:'var(--white)'};">R$${receitaMes(str)}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">
+      ${[['Mês 1',m1,true],['Mês 2',m2,false],['Mês 3',m3,false]].map(([lbl,v,d]) => `
+        <div style="background:${d?'var(--gold-bg)':'var(--surface3)'};border:1px solid ${d?'var(--gold-dim)':'var(--border)'};border-radius:7px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:var(--gray2);margin-bottom:2px;">${lbl}</div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--gray2);">${fmtK(v)} str.</div>
+          <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:${d?cor:'var(--white)'};">R$${rec(v)}</div>
         </div>`).join('')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface3);border-radius:8px;padding:10px 14px;">
       <div>
         <div style="font-size:10px;color:var(--gray2);text-transform:uppercase;letter-spacing:.05em;">Total 6 meses</div>
-        <div style="font-size:11px;color:var(--gray2);">${fmtStr(total6m)} streams acumulados</div>
+        <div style="font-size:11px;color:var(--gray2);">${fmtK(total6m)} streams acumulados</div>
       </div>
-      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--gold);">R$${receitaTotal}</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--gold);">R$${rec(total6m)}</div>
     </div>
     <div style="font-size:10px;color:var(--gray3);margin-top:8px;line-height:1.5;">
-      * Conversão ${Math.round(conv*100)}% = % dos ouvintes do artista que vão ouvir o feat.
-      Curva de decaimento padrão da indústria (mês 1 → 6). Valores estimados.
+      * Base = média das top 3 músicas do artista. Curva de decaimento padrão da indústria. Valores estimados.
     </div>
   `;
 }
@@ -1013,6 +1058,20 @@ function toggleForm() {
   ch.className   = 'add-chevron' + (formOpen ? ' open' : '');
 }
 
+/** Lê os campos de streams das top tracks do formulário. */
+function lerTopTracksForm() {
+  const tracks = [];
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById(`f-track-streams-${i}`);
+    if (!el) break;
+    tracks.push({
+      nome:    el.dataset.trackNome || `Música ${i+1}`,
+      streams: parseInt(el.value) || 0,
+    });
+  }
+  return tracks;
+}
+
 async function addArtist() {
   const nome      = document.getElementById('f-nome').value.trim();
   const spotifyId = document.getElementById('f-spot-id').value.trim();
@@ -1037,7 +1096,8 @@ async function addArtist() {
     spotifyId:   document.getElementById('f-spot-id').value           || '',
     popularidade: parseInt(document.getElementById('f-pop').value)    || 0,
     imageUrl:    document.getElementById('f-img-url').value           || '',
-    incompleto:  !document.getElementById('f-seg').value, // marca como incompleto se não tem dados manuais
+    incompleto:  !document.getElementById('f-seg').value,
+    topTracks:   lerTopTracksForm(),
   };
 
   artists.push(novoArtista);
