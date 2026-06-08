@@ -950,6 +950,52 @@ input[type="range"]::-moz-range-thumb {
 .no-results-sub  { font-size: 12px; color: var(--gray3); }
 
 
+/* ── FORM SECTION LABELS ────────────────────────────────────── */
+.form-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray2);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-section-auto {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--green);
+  background: rgba(0,201,141,.1);
+  border: 1px solid rgba(0,201,141,.25);
+  border-radius: 20px;
+  padding: 2px 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.form-section-manual {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--gold);
+  background: var(--gold-bg);
+  border: 1px solid var(--gold-dim);
+  border-radius: 20px;
+  padding: 2px 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.field-src {
+  font-size: 9px;
+  color: var(--green);
+  font-weight: 600;
+  margin-left: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 /* ── SPOTIFY SEARCH ROW ─────────────────────────────────────── */
 .spotify-search-row {
   display: flex;
@@ -1016,11 +1062,39 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid var(--border2);
   border-radius: var(--r);
   width: 100%;
-  max-width: 520px;
-  max-height: 90vh;
+  max-width: 900px;
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 24px 64px rgba(0, 0, 0, .6);
+}
+
+/* No desktop, usa layout de 2 colunas dentro do modal */
+@media (min-width: 700px) {
+  .dd-modal-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 20px;
+    align-content: start;
+  }
+  /* Perfil e top músicas ocupam as 2 colunas */
+  .dd-modal-body > *:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Mobile: mantém tudo em coluna única */
+@media (max-width: 699px) {
+  .dd-modal {
+    max-width: 100%;
+    max-height: 95vh;
+    border-radius: 12px 12px 0 0;
+    margin-top: auto;
+  }
+  .dd-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
 }
 
 .dd-modal-head {

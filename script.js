@@ -362,14 +362,15 @@ async function fetchSpotify() {
 
 /** Preenche o formulário com os dados de um artista escolhido. */
 function preencherArtista(artist) {
+  // Campos ocultos
   document.getElementById('f-seg-spot').value = artist.followers?.total || 0;
   document.getElementById('f-pop').value       = artist.popularity      || 0;
   document.getElementById('f-spot-id').value   = artist.id;
-  document.getElementById('f-nome').value      = artist.name;
 
-  const followers = artist.followers?.total || 0;
-  document.getElementById('f-spotify').value = followers;
+  // Campo de nome (usado no cadastro)
+  document.getElementById('f-nome').value = artist.name;
 
+  // Detecta nicho pelo gênero
   const genreMap = {
     funk: 'funk', trap: 'trap', rap: 'rap', 'hip hop': 'rap',
     'hip-hop': 'rap', 'r&b': 'rb', 'soul': 'rb', reggae: 'outro',
@@ -384,13 +385,25 @@ function preencherArtista(artist) {
     }
     if (nichoDetectado !== 'outro') break;
   }
-  document.getElementById('f-niche').value = nichoDetectado;
+
+  // Ativa e preenche campos automáticos (visíveis mas readonly)
+  const autoFields = document.getElementById('auto-fields');
+  if (autoFields) {
+    autoFields.style.opacity = '1';
+    autoFields.style.pointerEvents = 'auto';
+    const nomeDisplay = document.getElementById('f-nome-display');
+    const popDisplay  = document.getElementById('f-pop-display');
+    const nicheSelect = document.getElementById('f-niche');
+    if (nomeDisplay) { nomeDisplay.value = artist.name; nomeDisplay.disabled = false; }
+    if (popDisplay)  { popDisplay.value  = artist.popularity || 0; popDisplay.disabled = false; }
+    if (nicheSelect) { nicheSelect.value = nichoDetectado; nicheSelect.disabled = false; }
+  }
 
   // Mostra preview do artista confirmado
   renderArtistPreview(artist);
 
   const genreStr = genres.slice(0, 2).join(', ') || 'gênero não identificado';
-  showToast(`✓ ${artist.name} · ${fmtN(followers)} seguidores · ${genreStr}`);
+  showToast(`✓ ${artist.name} · Pop: ${artist.popularity}/100 · ${genreStr}`);
 }
 
 window.preencherArtista = preencherArtista;
@@ -406,8 +419,10 @@ function renderSearchDropdown(results) {
       const img = a.images?.[0]?.url
         ? `<img src="${a.images[0].url}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;">`
         : `<div style="width:40px;height:40px;border-radius:6px;background:var(--surface3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">🎵</div>`;
-      const followers = fmtN(a.followers?.total || 0);
-      const genre     = a.genres?.[0] || 'sem gênero';
+      const pop   = a.popularity || 0;
+      const genre = a.genres?.[0] || '';
+      const popColor = pop >= 70 ? 'var(--green)' : pop >= 40 ? 'var(--amber)' : 'var(--gray2)';
+      const popLabel = pop >= 70 ? '🔥 Famoso' : pop >= 40 ? '📈 Em alta' : pop > 0 ? '🎵 Indie' : '';
       return `
         <div onclick="preencherArtista(${JSON.stringify(a).replace(/"/g, '&quot;')})"
           style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;
@@ -418,9 +433,12 @@ function renderSearchDropdown(results) {
           ${img}
           <div style="flex:1;min-width:0;">
             <div style="font-size:13px;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.name}</div>
-            <div style="font-size:11px;color:var(--gray2);">${followers} seguidores · ${genre}</div>
+            <div style="font-size:11px;color:var(--gray2);">${genre || 'sem gênero'} ${popLabel ? '·' : ''} <span style="color:${popColor}">${popLabel}</span></div>
           </div>
-          <div style="font-size:10px;font-family:var(--mono);color:var(--gold);flex-shrink:0;">Escolher →</div>
+          <div style="font-size:11px;font-family:var(--mono);color:${popColor};flex-shrink:0;text-align:right;">
+            ${pop > 0 ? `<div style="font-weight:700">${pop}<span style="font-size:9px;color:var(--gray2)">/100</span></div><div style="font-size:9px;color:var(--gray3)">popularidade</div>` : ''}
+            <div style="font-size:10px;color:var(--gold);margin-top:2px;">Escolher →</div>
+          </div>
         </div>`;
     }).join('')}
   `;
@@ -631,7 +649,12 @@ function openDD(id) {
   `;
 
   document.getElementById('dd-title').textContent = `${a.nome}`;
-  document.getElementById('dd-body').innerHTML = perfilHtml + `
+  document.getElementById('dd-body').innerHTML = `
+    <!-- Cabeçalho ocupa as 2 colunas -->
+    <div style="grid-column:1/-1">${perfilHtml}</div>
+
+    <!-- COLUNA ESQUERDA -->
+    <div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
       <div style="background:var(--surface2);border-radius:8px;padding:12px;">
@@ -675,6 +698,11 @@ function openDD(id) {
         em mídia vai retornar pra você também."
       </div>
     </div>
+
+    </div><!-- /coluna esquerda -->
+
+    <!-- COLUNA DIREITA -->
+    <div>
 
     <!-- ── CALCULADORA DE FEAT ─────────────────────────────── -->
     <div style="margin-top:16px;border:1px solid var(--border2);border-radius:10px;overflow:hidden;">
@@ -738,6 +766,8 @@ function openDD(id) {
 
       </div>
     </div>
+
+    </div><!-- /coluna direita -->
   `;
 
   document.getElementById('dd-modal').style.display = 'flex';
@@ -973,7 +1003,7 @@ function toggleForm() {
 
 async function addArtist() {
   const nome = document.getElementById('f-nome').value.trim();
-  if (!nome) { alert('Coloca o nome do artista!'); return; }
+  if (!nome) { alert('Busca o artista no Spotify primeiro!'); return; }
 
   const novoArtista = {
     id:          nextId++,
@@ -983,23 +1013,30 @@ async function addArtist() {
     reels:       parseFloat(document.getElementById('f-reels').value) || 0,
     spotify:     parseInt(document.getElementById('f-spotify').value) || 0,
     freq:        parseInt(document.getElementById('f-freq').value)    || 0,
-    niche:       document.getElementById('f-niche').value,
+    niche:       document.getElementById('f-niche').value             || 'outro',
     comp:        document.getElementById('f-comp').checked,
     colab:       document.getElementById('f-colab').checked,
     tiktok:      parseInt(document.getElementById('f-tiktok').value)  || 0,
     streams28:   0,
     ouvintes28:  0,
     ddChecklist: [],
-    spotifyId:   document.getElementById('f-spot-id').value || '',
+    spotifyId:   document.getElementById('f-spot-id').value           || '',
+    popularidade: parseInt(document.getElementById('f-pop').value)    || 0,
+    incompleto:  !document.getElementById('f-seg').value, // marca como incompleto se não tem dados manuais
   };
 
   artists.push(novoArtista);
 
-  ['f-nome','f-seg','f-eng','f-reels','f-spotify','f-freq','f-tiktok','f-spot-id','f-seg-spot','f-pop']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  document.getElementById('f-comp').checked  = false;
-  document.getElementById('f-colab').checked = false;
+  ['f-nome','f-seg','f-eng','f-reels','f-spotify','f-freq','f-tiktok','f-spot-id','f-seg-spot','f-pop','f-nome-display','f-pop-display']
+    .forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.disabled = false; } });
+  document.getElementById('f-niche').value    = 'funk';
+  document.getElementById('f-niche').disabled = false;
+  document.getElementById('f-comp').checked   = false;
+  document.getElementById('f-colab').checked  = false;
   document.getElementById('spotify-preview').innerHTML = '';
+  // Reset visual dos campos automáticos
+  const autoFields = document.getElementById('auto-fields');
+  if (autoFields) { autoFields.style.opacity = '.5'; autoFields.style.pointerEvents = 'none'; }
 
   saveLocal();
   showToast('⟳ Salvando na nuvem...', 1500);
@@ -1182,7 +1219,10 @@ function buildCard(a) {
         <div class="acard-head">
           <div>
             <div class="acard-name">${a.nome}</div>
-            <div class="acard-meta"><span class="niche-tag">${a.niche}</span></div>
+            <div class="acard-meta">
+              <span class="niche-tag">${a.niche}</span>
+              ${a.incompleto ? '<span style="font-size:9px;color:var(--amber);background:rgba(240,160,48,.12);border:1px solid rgba(240,160,48,.3);border-radius:10px;padding:1px 6px;margin-left:4px;">⚠ Incompleto</span>' : ''}
+            </div>
           </div>
           <span class="score-pill ${pillCls}">${pillLbl} · ${a.sc}</span>
         </div>

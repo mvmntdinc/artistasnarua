@@ -81,14 +81,14 @@
 
       <div class="add-body" id="form-body">
 
-        <!-- Busca Spotify -->
+        <!-- ── STEP 1: BUSCA SPOTIFY (automático) ──────────── -->
+        <div class="form-section-label">1 · Buscar no Spotify <span class="form-section-auto">preenchido automático</span></div>
         <div class="spotify-search-row">
           <div class="fg" style="flex:1">
-            <label>Link do Spotify ou nome do artista</label>
-            <input type="text" id="f-nome" placeholder="https://open.spotify.com/artist/... ou nome do artista"/>
+            <input type="text" id="f-nome" placeholder="Cole o link ou digite o nome do artista"/>
           </div>
           <button id="btn-spotify" class="btn-spotify" onclick="fetchSpotify()">
-            🔍 Buscar no Spotify
+            🔍 Buscar
           </button>
         </div>
 
@@ -100,7 +100,35 @@
         <input type="hidden" id="f-seg-spot"/>
         <input type="hidden" id="f-pop"/>
 
+        <!-- Campos auto preenchidos — somente leitura visual -->
+        <div class="form-grid" id="auto-fields" style="opacity:.5;pointer-events:none;">
+          <div class="fg">
+            <label>Nome <span class="field-src">Spotify ✓</span></label>
+            <input type="text" id="f-nome-display" placeholder="Preenchido após busca" disabled/>
+          </div>
+          <div class="fg">
+            <label>Nicho / Gênero <span class="field-src">Spotify ✓</span></label>
+            <select id="f-niche" disabled>
+              <option value="funk">Funk</option>
+              <option value="trap">Trap</option>
+              <option value="rap">Rap / BoomBap</option>
+              <option value="rb">R&amp;B</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Popularidade Spotify <span class="field-src">Spotify ✓</span></label>
+            <input type="number" id="f-pop-display" placeholder="0–100" disabled/>
+          </div>
+        </div>
+
+        <!-- ── STEP 2: DADOS MANUAIS ─────────────────────── -->
+        <div class="form-section-label" style="margin-top:16px;">2 · Dados do artista <span class="form-section-manual">preencha você</span></div>
         <div class="form-grid">
+          <div class="fg">
+            <label>Ouvintes Spotify/mês</label>
+            <input type="number" id="f-spotify" placeholder="veja no perfil público" min="0"/>
+          </div>
           <div class="fg">
             <label>Seguidores Instagram</label>
             <input type="number" id="f-seg" placeholder="12000" min="0"/>
@@ -114,26 +142,12 @@
             <input type="number" id="f-reels" placeholder="20" min="0"/>
           </div>
           <div class="fg">
-            <label>Ouvintes Spotify/mês</label>
-            <input type="number" id="f-spotify" placeholder="1500" min="0"/>
-          </div>
-          <div class="fg">
             <label>Posts por semana</label>
             <input type="number" id="f-freq" placeholder="3" min="0" max="21"/>
           </div>
           <div class="fg">
             <label>TikTok — Seguidores</label>
             <input type="number" id="f-tiktok" placeholder="3500" min="0"/>
-          </div>
-          <div class="fg">
-            <label>Nicho</label>
-            <select id="f-niche">
-              <option value="funk">Funk</option>
-              <option value="trap">Trap</option>
-              <option value="rap">Rap / BoomBap</option>
-              <option value="rb">R&amp;B</option>
-              <option value="outro">Outro</option>
-            </select>
           </div>
         </div>
 
