@@ -201,7 +201,8 @@ async function getTopTracks(artistId) {
  * Retorna null se não for um URL válido.
  */
 function extractSpotifyId(input) {
-  const match = input.match(/spotify\.com\/artist\/([A-Za-z0-9]+)/);
+  // Aceita: spotify.com/artist/ID  ou  spotify.com/intl-pt/artist/ID  etc.
+  const match = input.match(/spotify\.com(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/artist\/([A-Za-z0-9]+)/i);
   return match ? match[1] : null;
 }
 
