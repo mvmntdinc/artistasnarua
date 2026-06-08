@@ -632,9 +632,13 @@ function openDD(id) {
       </div>` : '';
 
   // Perfil resumido no topo
+  const avatarHtml = a.imageUrl
+    ? `<img src="${a.imageUrl}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--gold-dim);">`
+    : `<div style="width:56px;height:56px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#000;flex-shrink:0;">${a.nome.charAt(0)}</div>`;
+
   const perfilHtml = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
-      <div style="width:48px;height:48px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#000;flex-shrink:0;">${a.nome.charAt(0)}</div>
+      ${avatarHtml}
       <div style="flex:1;">
         <div style="font-size:16px;font-weight:700;color:var(--white);">${a.nome}</div>
         <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;">
