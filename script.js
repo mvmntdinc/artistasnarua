@@ -305,7 +305,9 @@ async function searchSpotifyArtists(queryText) {
  * Requer Spotify Premium -- retorna array vazio se der 403.
  */
 async function getTopTracks(artistId) {
-  const token = await getSpotifyToken();
+  const token = (spotifyToken && Date.now() < spotifyTokenExp)
+    ? spotifyToken
+    : localStorage.getItem('sp_token');
   if (!token) return [];
   try {
     const res = await fetch(
