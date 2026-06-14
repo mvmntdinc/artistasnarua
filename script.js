@@ -762,7 +762,7 @@ function renderArtistPreview(artist) {
       ${img}
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--white);">✓ ${artist.name}</div>
-        <div style="font-size:11px;color:var(--gray2);">${fmtN(artist.followers?.total||0)} seguidores · Popularidade: ${artist.popularity}/100</div>
+        <div style="font-size:11px;color:var(--gray2);">${fmtN(artist.followers?.total||0)} seguidores · Popularidade: ${artist.popularity ?? '—'}/100</div>
         <div style="font-size:10px;color:var(--gold);margin-top:2px;">${(artist.genres||[]).slice(0,2).join(', ') || 'gênero não identificado'}</div>
       </div>
     </div>

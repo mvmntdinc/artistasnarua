@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Spotify Explorer — MVMNTD INC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    /* ── EXPLORER ESPECÍFICO ── */
+    .ex-search-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 2rem;
+    }
+    .ex-search-bar input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-sm);
+      color: var(--white);
+      font-family: var(--font);
+      font-size: 15px;
+      padding: 12px 18px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .ex-search-bar input:focus {
+      border-color: var(--gold);
+      box-shadow: var(--shadow-gold);
+    }
+    .ex-search-bar input::placeholder { color: var(--gray3); }
+
+    /* Artist results dropdown */
+    .ex-results {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+
+    .ex-result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .ex-result-item:last-child { border-bottom: none; }
+    .ex-result-item:hover { background: var(--surface2); }
+    .ex-result-img {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: var(--surface3);
+    }
+
+    /* Profile hero */
+    .ex-profile {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.5rem;
+      align-items: start;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 600px) { .ex-profile { grid-template-columns: 1fr; } }
+    .ex-profile-img {
+      width: 140px; height: 140px;
+      border-radius: var(--r);
+      object-fit: cover;
+      border: 2px solid var(--gold-dim);
+    }
+    .ex-profile-name {
+      font-size: clamp(24px,4vw,40px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+
+    /* Stats grid */
+    .ex-stats {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .ex-stat {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-sm);
+      padding: 8px 14px;
+      text-align: center;
+    }
+    .ex-stat-val {
+      font-size: 20px;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: var(--white);
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+    .ex-stat-lbl { font-size: 10px; color: var(--gray2); text-transform: uppercase; letter-spacing: .05em; }
+
+    /* Popularity bar */
+    .pop-bar {
+      height: 6px;
+      background: var(--surface3);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .pop-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--gold), var(--gold2));
+      transition: width .8s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* Section cards */
+    .ex-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+    .ex-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .ex-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .ex-section-body { padding: 16px 20px; }
+
+    /* Track list */
+    .ex-track {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .ex-track:last-child { border-bottom: none; }
+    .ex-track-num {
+      width: 20px;
+      font-size: 11px;
+      color: var(--gray3);
+      text-align: center;
+      flex-shrink: 0;
+      font-family: var(--mono);
+    }
+    .ex-track-img {
+      width: 40px; height: 40px;
+      border-radius: 4px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: var(--surface3);
+    }
+    .ex-track-name { font-size: 13px; font-weight: 600; color: var(--white); }
+    .ex-track-meta { font-size: 11px; color: var(--gray2); margin-top: 1px; }
+    .ex-track-pop-bar {
+      flex: 1;
+      height: 3px;
+      background: var(--surface3);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .ex-track-pop-fill { height: 100%; border-radius: 2px; }
+
+    /* Audio features chips */
+    .af-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .af-chip {
+      font-size: 10px;
+      padding: 2px 8px;
+      background: var(--surface3);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-pill);
+      color: var(--gray1);
+    }
+    .af-chip b { color: var(--white); }
+
+    /* Audio feature bars */
+    .af-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .af-item { background: var(--surface2); border-radius: var(--r-sm); padding: 10px 12px; }
+    .af-item-label { font-size: 10px; color: var(--gray2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .af-item-val { font-size: 18px; font-weight: 700; font-family: var(--mono); color: var(--white); margin-bottom: 4px; }
+    .af-item-bar { height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
+    .af-item-fill { height: 100%; border-radius: 2px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+
+    /* Album grid */
+    .ex-album-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .ex-album {
+      cursor: pointer;
+      transition: transform .15s;
+    }
+    .ex-album:hover { transform: translateY(-2px); }
+    .ex-album img, .ex-album-placeholder {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: var(--r-sm);
+      object-fit: cover;
+      display: block;
+      margin-bottom: 8px;
+      background: var(--surface3);
+    }
+    .ex-album-name { font-size: 12px; font-weight: 600; color: var(--white); margin-bottom: 2px; line-height: 1.3; }
+    .ex-album-meta { font-size: 10px; color: var(--gray2); }
+
+    /* Related artists */
+    .ex-related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+    .ex-related {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, transform .15s;
+    }
+    .ex-related:hover { border-color: var(--gold-dim); transform: translateY(-2px); }
+    .ex-related img {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 0 auto 8px;
+      display: block;
+      background: var(--surface3);
+    }
+    .ex-related-name { font-size: 11px; font-weight: 700; color: var(--white); margin-bottom: 3px; }
+    .ex-related-pop { font-size: 10px; color: var(--gold); font-family: var(--mono); }
+
+    /* Playlist grid */
+    .ex-playlist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .ex-playlist {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-sm);
+      overflow: hidden;
+      transition: border-color .15s;
+    }
+    .ex-playlist:hover { border-color: var(--border2); }
+    .ex-playlist img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      display: block;
+      background: var(--surface3);
+    }
+    .ex-playlist-info { padding: 8px 10px; }
+    .ex-playlist-name { font-size: 11px; font-weight: 600; color: var(--white); margin-bottom: 2px; }
+    .ex-playlist-meta { font-size: 10px; color: var(--gray2); }
+
+    /* Spotify link button */
+    .btn-spotify-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1DB954;
+      color: #000;
+      border: none;
+      border-radius: var(--r-pill);
+      padding: 6px 14px;
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s;
+    }
+    .btn-spotify-link:hover { background: #1ed760; }
+
+    /* Loading spinner */
+    .ex-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4rem;
+      color: var(--gray2);
+      flex-direction: column;
+      gap: 12px;
+    }
+    .ex-spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border2);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Genre tags */
+    .genre-tag {
+      display: inline-block;
+      padding: 3px 10px;
+      background: var(--surface3);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      color: var(--gray1);
+      margin: 2px;
+    }
+
+    /* Preview play button */
+    .play-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #1DB954;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #000;
+      flex-shrink: 0;
+      transition: transform .15s, background .15s;
+    }
+    .play-btn:hover { background: #1ed760; transform: scale(1.1); }
+    .play-btn.playing { background: var(--gold); }
+    .play-btn:disabled { background: var(--surface3); color: var(--gray2); cursor: default; }
+
+    /* Back link */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--gray2);
+      text-decoration: none;
+      margin-bottom: 1.5rem;
+      transition: color .15s;
+    }
+    .back-link:hover { color: var(--gold); }
+
+    /* Tab bar reutilizado para filtros de álbum */
+    .filter-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+    .filter-tab {
+      padding: 5px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray2);
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .filter-tab.active {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #000;
+    }
+
+    /* Main audio features avg display */
+    .af-avg-wrap {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .af-avg-card {
+      background: var(--surface2);
+      border-radius: var(--r-sm);
+      padding: 12px;
+      text-align: center;
+    }
+    .af-avg-val {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: var(--mono);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .af-avg-lbl { font-size: 10px; color: var(--gray2); text-transform: uppercase; letter-spacing: .04em; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <img src="logo.png" alt="MVMNTD INC" class="logo-img"/>
+    <div>
+      <div class="logo-name">MVMNTD INC</div>
+      <div class="logo-sub">Spotify Explorer</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div id="auth-status" style="font-size:11px;color:var(--gray2);font-family:var(--mono);"></div>
+    <a href="index.html" style="font-size:11px;color:var(--gray2);text-decoration:none;padding:5px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-sm);transition:color .15s;" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--gray2)'">← NARUA</a>
+  </div>
+</header>
+
+<div class="hero" style="padding-bottom:1rem;">
+  <div class="hero-tag">API Spotify Completa</div>
+  <h1 class="hero-title">Spotify <em>Explorer</em></h1>
+  <p class="hero-sub">Tudo que a API do Spotify oferece: perfil, discografia, top músicas, audio features, artistas relacionados e playlists.</p>
+</div>
+
+<div class="container" style="max-width:1100px;">
+
+  <!-- BUSCA -->
+  <div class="ex-search-bar">
+    <input type="text" id="ex-input" placeholder="Nome do artista ou link do Spotify..." onkeydown="if(event.key==='Enter')exSearch()"/>
+    <button class="btn-spotify" onclick="exSearch()" id="ex-btn">🔍 Buscar</button>
+  </div>
+
+  <!-- RESULTADOS DA BUSCA -->
+  <div id="ex-results"></div>
+
+  <!-- LOADING -->
+  <div id="ex-loading" style="display:none;" class="ex-loading">
+    <div class="ex-spinner"></div>
+    <div style="font-size:13px;">Carregando dados do Spotify...</div>
+  </div>
+
+  <!-- CONTEÚDO DO ARTISTA -->
+  <div id="ex-content" style="display:none;">
+
+    <!-- PERFIL -->
+    <section class="ex-section">
+      <div class="ex-section-head">
+        <span class="ex-section-title">🎤 Perfil do Artista</span>
+        <a id="ex-spotify-link" href="#" target="_blank" class="btn-spotify-link">Abrir no Spotify ↗</a>
+      </div>
+      <div class="ex-section-body">
+        <div class="ex-profile" id="ex-profile"></div>
+      </div>
+    </section>
+
+    <!-- TOP MÚSICAS -->
+    <section class="ex-section">
+      <div class="ex-section-head">
+        <span class="ex-section-title">🎵 Top 10 Músicas</span>
+        <span id="ex-tracks-market" style="font-size:10px;color:var(--gray2);">Mercado: Brasil</span>
+      </div>
+      <div class="ex-section-body" id="ex-tracks"></div>
+    </section>
+
+    <!-- AUDIO FEATURES MÉDIAS -->
+    <section class="ex-section">
+      <div class="ex-section-head">
+        <span class="ex-section-title">📊 Perfil Sonoro (Audio Features)</span>
+        <span style="font-size:10px;color:var(--gray2);">Média das top músicas</span>
+      </div>
+      <div class="ex-section-body" id="ex-audio-features"></div>
+    </section>
+
+    <!-- DISCOGRAFIA -->
+    <section class="ex-section">
+      <div class="ex-section-head">
+        <span class="ex-section-title">💿 Discografia</span>
+        <span id="ex-disco-count" style="font-size:10px;color:var(--gray2);"></span>
+      </div>
+      <div class="ex-section-body">
+        <div class="filter-tabs" id="ex-album-tabs"></div>
+        <div class="ex-album-grid" id="ex-albums"></div>
+      </div>
+    </section>
+
+    <!-- PLAYLISTS EDITORIAIS -->
+    <section class="ex-section">
+      <div class="ex-section-head">
+        <span class="ex-section-title">📋 Playlists com o Artista</span>
+        <span style="font-size:10px;color:var(--gray2);">Busca por nome</span>
+      </div>
+      <div class="ex-section-body">
+        <div class="ex-playlist-grid" id="ex-playlists"></div>
+      </div>
+    </section>
+
+    <!-- ARTISTAS RELACIONADOS -->
+    <section class="ex-section">
+      <div class="ex-section-head">
+        <span class="ex-section-title">🔗 Artistas Relacionados</span>
+        <span style="font-size:10px;color:var(--gray2);">Algoritmo Spotify</span>
+      </div>
+      <div class="ex-section-body">
+        <div class="ex-related-grid" id="ex-related"></div>
+      </div>
+    </section>
+
+  </div><!-- /#ex-content -->
+
+</div><!-- /.container -->
+
+<div id="toast"></div>
+
+<script type="module">
+/* ── AUTH (reutiliza token do main site) ── */
+const CLIENT_ID = 'c8de8dbc0c824f88bf94b42ce58e38ce';
+const REDIRECT  = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? location.origin + location.pathname
+  : 'https://mvmntdinc.github.io/artistasnarua/spotify-explorer.html';
+
+let token    = localStorage.getItem('sp_token') || null;
+let tokenExp = parseInt(localStorage.getItem('sp_exp') || '0');
+
+const authStatus = document.getElementById('auth-status');
+
+async function getToken() {
+  if (token && Date.now() < tokenExp) return token;
+  const refresh = localStorage.getItem('sp_refresh');
+  if (refresh) {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type:'refresh_token', refresh_token:refresh, client_id:CLIENT_ID }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      token    = d.access_token;
+      tokenExp = Date.now() + (d.expires_in - 60) * 1000;
+      localStorage.setItem('sp_token', token);
+      localStorage.setItem('sp_exp',   String(tokenExp));
+      if (d.refresh_token) localStorage.setItem('sp_refresh', d.refresh_token);
+      return token;
+    }
+  }
+  return null;
+}
+
+async function ensureAuth() {
+  const t = await getToken();
+  if (t) {
+    authStatus.textContent = '● Conectado';
+    authStatus.style.color = 'var(--green)';
+    return t;
+  }
+  // Callback PKCE
+  const code     = new URLSearchParams(location.search).get('code');
+  const verifier = sessionStorage.getItem('sp_verifier');
+  if (code && verifier) {
+    history.replaceState({}, '', location.pathname);
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type:'authorization_code', code, redirect_uri:REDIRECT, client_id:CLIENT_ID, code_verifier:verifier }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      token    = d.access_token;
+      tokenExp = Date.now() + (d.expires_in - 60) * 1000;
+      localStorage.setItem('sp_token',   token);
+      localStorage.setItem('sp_exp',     String(tokenExp));
+      if (d.refresh_token) localStorage.setItem('sp_refresh', d.refresh_token);
+      sessionStorage.removeItem('sp_verifier');
+      authStatus.textContent = '● Conectado';
+      authStatus.style.color = 'var(--green)';
+      return token;
+    }
+  }
+  // Precisa fazer login
+  authStatus.innerHTML = '<button onclick="doAuth()" style="background:var(--gold);color:#000;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;">Conectar Spotify</button>';
+  return null;
+}
+
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+window.doAuth = async () => {
+  const verifier  = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  sessionStorage.setItem('sp_verifier', verifier);
+  const p = new URLSearchParams({ client_id:CLIENT_ID, response_type:'code', redirect_uri:REDIRECT,
+    scope:'user-read-private', code_challenge_method:'S256', code_challenge:challenge });
+  location.href = 'https://accounts.spotify.com/authorize?' + p;
+};
+
+/* ── API helpers ── */
+async function api(path) {
+  const t = await getToken();
+  if (!t) return null;
+  const res = await fetch('https://api.spotify.com/v1' + path, { headers: { Authorization: 'Bearer ' + t } });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/* ── Format helpers ── */
+const fmtN = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(0)+'K' : String(n||0);
+const fmtDur = ms => { const s=Math.floor(ms/1000); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
+const fmtDate = d => d ? new Date(d).toLocaleDateString('pt-BR',{year:'numeric',month:'short'}) : '?';
+const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
+
+/* ── SEARCH ── */
+window.exSearch = async () => {
+  const q = document.getElementById('ex-input').value.trim();
+  if (!q) return;
+  const t = await ensureAuth();
+  if (!t) return;
+
+  const btn = document.getElementById('ex-btn');
+  btn.textContent = '⟳ Buscando...';
+  btn.disabled = true;
+
+  try {
+    // Tenta extrair ID direto de URL do Spotify
+    const idMatch = q.match(/spotify\.com(?:\/[a-z-]+)?\/artist\/([A-Za-z0-9]+)/i);
+    if (idMatch) {
+      await loadArtist(idMatch[1]);
+    } else {
+      const data = await api(`/search?q=${encodeURIComponent(q)}&type=artist&market=BR&limit=8`);
+      const items = data?.artists?.items || [];
+      if (!items.length) { showToast('Nenhum artista encontrado'); return; }
+      if (items.length === 1) { await loadArtist(items[0].id); return; }
+      renderSearchResults(items);
+    }
+  } finally {
+    btn.textContent = '🔍 Buscar';
+    btn.disabled = false;
+  }
+};
+
+function renderSearchResults(items) {
+  document.getElementById('ex-content').style.display = 'none';
+  document.getElementById('ex-results').innerHTML = `
+    <div class="ex-results">
+      <div style="padding:10px 16px;font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);">
+        ${items.length} artistas encontrados — escolha o certo
+      </div>
+      ${items.map(a => {
+        const img = a.images?.[2]?.url || a.images?.[1]?.url || a.images?.[0]?.url;
+        const popColor = a.popularity >= 70 ? 'var(--green)' : a.popularity >= 40 ? 'var(--amber)' : 'var(--gray2)';
+        return `
+          <div class="ex-result-item" onclick="selectArtist('${a.id}')">
+            ${img ? `<img src="${img}" class="ex-result-img" alt="">` : `<div class="ex-result-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🎵</div>`}
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:700;color:var(--white);">${a.name}</div>
+              <div style="font-size:11px;color:var(--gray2);margin-top:2px;">${(a.genres||[]).slice(0,2).join(' · ') || 'sem gênero'}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <div style="font-size:13px;font-weight:700;font-family:var(--mono);color:${popColor};">${a.popularity ?? 0}</div>
+              <div style="font-size:10px;color:var(--gray3);">popularidade</div>
+              <div style="font-size:10px;color:var(--gray2);">${fmtN(a.followers?.total||0)} seg.</div>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
+window.selectArtist = async (id) => {
+  document.getElementById('ex-results').innerHTML = '';
+  await loadArtist(id);
+};
+
+/* ── LOAD ARTIST (tudo em paralelo) ── */
+let _allAlbums = [];
+
+async function loadArtist(artistId) {
+  document.getElementById('ex-content').style.display = 'none';
+  document.getElementById('ex-loading').style.display = 'flex';
+
+  try {
+    // Busca em paralelo: perfil + top tracks + álbuns + relacionados + playlists
+    const [artist, tracksData, albumsData, relatedData] = await Promise.all([
+      api(`/artists/${artistId}`),
+      api(`/artists/${artistId}/top-tracks?market=BR`),
+      api(`/artists/${artistId}/albums?include_groups=album,single,appears_on&market=BR&limit=50`),
+      api(`/artists/${artistId}/related-artists`),
+    ]);
+
+    if (!artist) { showToast('Artista não encontrado'); return; }
+
+    const tracks = (tracksData?.tracks || []).slice(0, 10);
+
+    // Audio features para todas as top tracks
+    let audioFeatures = {};
+    if (tracks.length) {
+      const ids = tracks.map(t => t.id).join(',');
+      const afData = await api(`/audio-features?ids=${ids}`);
+      (afData?.audio_features || []).forEach(af => {
+        if (af) audioFeatures[af.id] = af;
+      });
+    }
+
+    // Playlists com o nome do artista
+    const playlistsData = await api(`/search?q=${encodeURIComponent(artist.name)}&type=playlist&market=BR&limit=12`);
+
+    const albums   = albumsData?.items || [];
+    const related  = (relatedData?.artists || []).slice(0, 12);
+    const playlists = (playlistsData?.playlists?.items || []).filter(Boolean).slice(0, 12);
+
+    _allAlbums = albums;
+
+    // Render tudo
+    renderProfile(artist);
+    renderTracks(tracks, audioFeatures);
+    renderAudioFeaturesAvg(tracks, audioFeatures);
+    renderAlbums(albums, 'all');
+    renderAlbumTabs(albums);
+    renderPlaylists(playlists);
+    renderRelated(related);
+
+    // Link Spotify
+    document.getElementById('ex-spotify-link').href = artist.external_urls?.spotify || '#';
+
+    document.getElementById('ex-loading').style.display = 'none';
+    document.getElementById('ex-content').style.display = 'block';
+
+    // Limpa input e resultados
+    document.getElementById('ex-results').innerHTML = '';
+
+  } catch(e) {
+    console.error(e);
+    showToast('Erro ao carregar dados: ' + e.message);
+    document.getElementById('ex-loading').style.display = 'none';
+  }
+}
+
+/* ── RENDER: PERFIL ── */
+function renderProfile(a) {
+  const img = a.images?.[0]?.url;
+  const pop = a.popularity ?? 0;
+  const popColor = pop >= 70 ? 'var(--green)' : pop >= 40 ? 'var(--gold)' : 'var(--gray1)';
+  const followers = a.followers?.total || 0;
+  const genres = a.genres || [];
+
+  document.getElementById('ex-profile').innerHTML = `
+    ${img ? `<img src="${img}" class="ex-profile-img" alt="${a.name}">` :
+      `<div class="ex-profile-img" style="display:flex;align-items:center;justify-content:center;font-size:48px;background:var(--surface2);">🎤</div>`}
+    <div>
+      <div class="ex-profile-name">${a.name}</div>
+      <div style="margin-bottom:12px;">
+        ${genres.map(g => `<span class="genre-tag">${g}</span>`).join('') || '<span class="genre-tag" style="color:var(--gray3);">sem gênero registrado</span>'}
+      </div>
+      <div class="ex-stats">
+        <div class="ex-stat">
+          <div class="ex-stat-val" style="color:var(--gold);">${fmtN(followers)}</div>
+          <div class="ex-stat-lbl">Seguidores Spotify</div>
+        </div>
+        <div class="ex-stat">
+          <div class="ex-stat-val" style="color:${popColor};">${pop}</div>
+          <div class="ex-stat-lbl">Popularidade /100</div>
+          <div class="pop-bar"><div class="pop-fill" style="width:${pop}%;"></div></div>
+        </div>
+        <div class="ex-stat">
+          <div class="ex-stat-val">${genres.length}</div>
+          <div class="ex-stat-lbl">Gêneros</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--gray3);font-family:var(--mono);">ID: ${a.id}</div>
+    </div>`;
+}
+
+/* ── RENDER: TOP TRACKS ── */
+let _currentAudio = null;
+let _currentBtn   = null;
+
+function renderTracks(tracks, audioFeatures) {
+  const container = document.getElementById('ex-tracks');
+
+  container.innerHTML = tracks.map((t, i) => {
+    const af = audioFeatures[t.id];
+    const popColor = t.popularity >= 70 ? 'var(--green)' : t.popularity >= 40 ? 'var(--amber)' : 'var(--gray2)';
+    const img = t.album?.images?.[2]?.url || t.album?.images?.[1]?.url || '';
+    const hasPreview = !!t.preview_url;
+
+    return `
+      <div class="ex-track">
+        <span class="ex-track-num">${i+1}</span>
+        ${img ? `<img src="${img}" class="ex-track-img" alt="">` : `<div class="ex-track-img"></div>`}
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="ex-track-name">${t.name}</span>
+            ${t.explicit ? '<span style="font-size:9px;padding:0 4px;background:var(--surface3);border:1px solid var(--border2);border-radius:3px;color:var(--gray2);">E</span>' : ''}
+          </div>
+          <div class="ex-track-meta">${t.album?.name || ''} · ${fmtDur(t.duration_ms)}</div>
+          ${af ? `<div class="af-chips">
+            <span class="af-chip">🥁 <b>${Math.round(af.tempo)}</b> BPM</span>
+            <span class="af-chip">⚡ Energia <b>${Math.round(af.energy*100)}%</b></span>
+            <span class="af-chip">💃 Dance <b>${Math.round(af.danceability*100)}%</b></span>
+            <span class="af-chip">😊 Valência <b>${Math.round(af.valence*100)}%</b></span>
+            <span class="af-chip">🎸 ${['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][af.key]||'?'} ${af.mode===1?'Maior':'Menor'}</span>
+            ${af.acousticness > 0.5 ? '<span class="af-chip" style="color:var(--gold);">🎸 Acústico</span>' : ''}
+            ${af.instrumentalness > 0.5 ? '<span class="af-chip" style="color:var(--green);">🎹 Instrumental</span>' : ''}
+          </div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+          <div style="text-align:right;">
+            <div style="font-size:13px;font-weight:700;font-family:var(--mono);color:${popColor};">${t.popularity}</div>
+            <div style="font-size:9px;color:var(--gray3);">pop.</div>
+            <div class="ex-track-pop-bar" style="width:50px;margin-top:4px;">
+              <div class="ex-track-pop-fill" style="width:${t.popularity}%;background:${popColor};"></div>
+            </div>
+          </div>
+          <button class="play-btn" id="pbtn-${i}" ${!hasPreview?'disabled title="Sem prévia disponível"':'title="Ouvir 30s"'}
+            onclick="toggleTrack('aud-${i}','pbtn-${i}')">
+            ${hasPreview ? '▶' : '—'}
+          </button>
+          ${hasPreview ? `<audio id="aud-${i}" src="${t.preview_url}" preload="none"></audio>` : ''}
+          <a href="${t.external_urls?.spotify||'#'}" target="_blank"
+            style="font-size:18px;text-decoration:none;opacity:.5;transition:opacity .15s;"
+            onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5"
+            title="Abrir no Spotify">↗</a>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+window.toggleTrack = (audioId, btnId) => {
+  // Para o atual se diferente
+  if (_currentAudio && _currentAudio.id !== audioId) {
+    _currentAudio.pause();
+    if (_currentBtn) { _currentBtn.textContent = '▶'; _currentBtn.classList.remove('playing'); }
+  }
+  const audio = document.getElementById(audioId);
+  const btn   = document.getElementById(btnId);
+  if (!audio || !btn) return;
+  if (audio.paused) {
+    audio.play();
+    btn.textContent = '⏸';
+    btn.classList.add('playing');
+    audio.onended = () => { btn.textContent = '▶'; btn.classList.remove('playing'); };
+    _currentAudio = audio;
+    _currentBtn   = btn;
+  } else {
+    audio.pause();
+    btn.textContent = '▶';
+    btn.classList.remove('playing');
+  }
+};
+
+/* ── RENDER: AUDIO FEATURES MÉDIAS ── */
+function renderAudioFeaturesAvg(tracks, audioFeatures) {
+  const afs = tracks.map(t => audioFeatures[t.id]).filter(Boolean);
+  if (!afs.length) {
+    document.getElementById('ex-audio-features').innerHTML = '<div style="color:var(--gray2);font-size:12px;">Audio features não disponíveis para estas músicas.</div>';
+    return;
+  }
+
+  const avg = key => Math.round(afs.reduce((s,a) => s + (a[key]||0), 0) / afs.length * 100);
+  const avgRaw = key => (afs.reduce((s,a) => s + (a[key]||0), 0) / afs.length);
+
+  const bpmAvg = Math.round(afs.reduce((s,a) => s + a.tempo, 0) / afs.length);
+  const energyAvg = avg('energy');
+  const danceAvg  = avg('danceability');
+  const valenceAvg = avg('valence');
+  const acousticAvg = avg('acousticness');
+  const liveAvg = avg('liveness');
+  const speechAvg = avg('speechiness');
+  const instrAvg = avg('instrumentalness');
+
+  const afColor = v => v >= 70 ? 'var(--green)' : v >= 40 ? 'var(--gold)' : 'var(--gray1)';
+
+  document.getElementById('ex-audio-features').innerHTML = `
+    <div style="font-size:12px;color:var(--gray2);margin-bottom:14px;">
+      Média calculada sobre <b style="color:var(--white)">${afs.length} músicas</b>.
+      Baseado nos dados reais de análise de áudio do Spotify.
+    </div>
+    <div class="af-avg-wrap">
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:var(--gold);">${bpmAvg}</div>
+        <div class="af-avg-lbl">🥁 BPM Médio</div>
+      </div>
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:${afColor(energyAvg)};">${energyAvg}%</div>
+        <div class="af-avg-lbl">⚡ Energia</div>
+      </div>
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:${afColor(danceAvg)};">${danceAvg}%</div>
+        <div class="af-avg-lbl">💃 Danceabilidade</div>
+      </div>
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:${afColor(valenceAvg)};">${valenceAvg}%</div>
+        <div class="af-avg-lbl">😊 Valência</div>
+      </div>
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:${afColor(acousticAvg)};">${acousticAvg}%</div>
+        <div class="af-avg-lbl">🎸 Acústico</div>
+      </div>
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:${afColor(liveAvg)};">${liveAvg}%</div>
+        <div class="af-avg-lbl">🎤 Ao Vivo</div>
+      </div>
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:${afColor(speechAvg)};">${speechAvg}%</div>
+        <div class="af-avg-lbl">🗣️ Spoken Word</div>
+      </div>
+      <div class="af-avg-card">
+        <div class="af-avg-val" style="color:${afColor(instrAvg)};">${instrAvg}%</div>
+        <div class="af-avg-lbl">🎹 Instrumental</div>
+      </div>
+    </div>
+    <div style="background:var(--surface2);border-radius:var(--r-sm);padding:14px;margin-top:4px;">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Perfil Visual</div>
+      ${[
+        ['Energia',       energyAvg,  'var(--red)'],
+        ['Danceabilidade',danceAvg,   '#1DB954'],
+        ['Valência',      valenceAvg, 'var(--amber)'],
+        ['Acústico',      acousticAvg,'var(--gold)'],
+        ['Ao Vivo',       liveAvg,    'var(--green)'],
+        ['Spoken Word',   speechAvg,  'var(--gray1)'],
+      ].map(([lbl, val, color]) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
+          <span style="width:100px;font-size:11px;color:var(--gray2);">${lbl}</span>
+          <div style="flex:1;height:5px;background:var(--surface3);border-radius:3px;overflow:hidden;">
+            <div style="width:${val}%;height:100%;background:${color};border-radius:3px;transition:width .6s;"></div>
+          </div>
+          <span style="width:34px;text-align:right;font-size:11px;font-weight:700;font-family:var(--mono);color:${color};">${val}%</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ── RENDER: ÁLBUNS ── */
+function renderAlbumTabs(albums) {
+  const total    = albums.length;
+  const nAlbums  = albums.filter(a=>a.album_type==='album').length;
+  const nSingles = albums.filter(a=>a.album_type==='single').length;
+  const nFeats   = albums.filter(a=>a.album_type==='appears_on'||a.album_group==='appears_on').length;
+
+  document.getElementById('ex-disco-count').textContent = `${total} lançamentos`;
+
+  document.getElementById('ex-album-tabs').innerHTML = [
+    ['all',      `Todos (${total})`],
+    ['album',    `Álbuns (${nAlbums})`],
+    ['single',   `Singles (${nSingles})`],
+    ['appears_on',`Participações (${nFeats})`],
+  ].map(([val, lbl]) =>
+    `<button class="filter-tab${val==='all'?' active':''}" onclick="filterAlbums('${val}',this)">${lbl}</button>`
+  ).join('');
+}
+
+window.filterAlbums = (type, btn) => {
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAlbums(_allAlbums, type);
+};
+
+function renderAlbums(albums, type) {
+  const filtered = type === 'all' ? albums : albums.filter(a =>
+    type === 'appears_on' ? (a.album_type==='appears_on'||a.album_group==='appears_on') : a.album_type === type
+  );
+
+  document.getElementById('ex-albums').innerHTML = filtered.map(a => {
+    const img = a.images?.[1]?.url || a.images?.[0]?.url;
+    const typeLabel = a.album_type === 'album' ? '💿' : a.album_group === 'appears_on' || a.album_type === 'appears_on' ? '🤝' : '🎵';
+    return `
+      <a href="${a.external_urls?.spotify||'#'}" target="_blank" class="ex-album" style="text-decoration:none;">
+        ${img ? `<img src="${img}" alt="${a.name}">` : `<div class="ex-album-placeholder" style="display:flex;align-items:center;justify-content:center;font-size:32px;">🎵</div>`}
+        <div class="ex-album-name">${a.name}</div>
+        <div class="ex-album-meta">${typeLabel} ${a.album_type} · ${a.release_date?.slice(0,4)||'?'} · ${a.total_tracks} faixas</div>
+      </a>`;
+  }).join('') || '<div style="color:var(--gray2);font-size:12px;">Nenhum item nesta categoria.</div>';
+}
+
+/* ── RENDER: PLAYLISTS ── */
+function renderPlaylists(playlists) {
+  document.getElementById('ex-playlists').innerHTML = playlists.map(p => {
+    const img = p.images?.[0]?.url;
+    return `
+      <a href="${p.external_urls?.spotify||'#'}" target="_blank" class="ex-playlist" style="text-decoration:none;">
+        ${img ? `<img src="${img}" alt="${p.name}">` : `<div style="width:100%;aspect-ratio:1;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:32px;">🎵</div>`}
+        <div class="ex-playlist-info">
+          <div class="ex-playlist-name">${p.name}</div>
+          <div class="ex-playlist-meta">${fmtN(p.tracks?.total||0)} faixas · ${p.owner?.display_name||''}</div>
+        </div>
+      </a>`;
+  }).join('') || '<div style="color:var(--gray2);font-size:12px;">Nenhuma playlist encontrada.</div>';
+}
+
+/* ── RENDER: RELACIONADOS ── */
+function renderRelated(related) {
+  document.getElementById('ex-related').innerHTML = related.map(a => {
+    const img = a.images?.[2]?.url || a.images?.[1]?.url;
+    const popColor = a.popularity >= 70 ? 'var(--green)' : a.popularity >= 40 ? 'var(--amber)' : 'var(--gray2)';
+    return `
+      <div class="ex-related" onclick="selectArtist('${a.id}')">
+        ${img ? `<img src="${img}" alt="${a.name}">` : `<div style="width:60px;height:60px;border-radius:50%;background:var(--surface3);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:24px;">🎵</div>`}
+        <div class="ex-related-name">${a.name}</div>
+        <div class="ex-related-pop" style="color:${popColor};">${a.popularity} pop.</div>
+        <div style="font-size:9px;color:var(--gray3);margin-top:3px;">${(a.genres||[]).slice(0,1).join('')}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ── TOAST ── */
+function showToast(msg, ms=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/* ── INIT ── */
+ensureAuth();
+</script>
+</body>
+</html>
