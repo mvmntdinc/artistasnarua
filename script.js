@@ -301,27 +301,100 @@ async function searchSpotifyArtists(queryText) {
 }
 
 /**
- * Busca top tracks do artista no Brasil.
- * Requer Spotify Premium -- retorna array vazio se der 403.
+ * Busca TODOS os dados disponíveis do artista em paralelo.
+ * Retorna { tracks, albums, related, audioFeatures }
  */
-async function getTopTracks(artistId) {
+async function fetchAllSpotifyData(artistId) {
   const token = (spotifyToken && Date.now() < spotifyTokenExp)
     ? spotifyToken
     : localStorage.getItem('sp_token');
-  if (!token) return [];
-  try {
-    const res = await fetch(
-      `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=BR`,
-      { headers: { Authorization: 'Bearer ' + token } }
-    );
-    if (!res.ok) return []; // 403 = sem Premium ou sem permissão
-    const data = await res.json();
-    return (data.tracks || []).slice(0, 5).map(t => ({
-      nome:    t.name,
-      streams: t.popularity, // API pública não expõe streams reais -- usa popularity (0-100) como proxy
-      id:      t.id,
+  if (!token) return { tracks: [], albums: [], related: [], audioFeatures: {} };
+
+  const headers = { Authorization: 'Bearer ' + token };
+
+  const [tracksRes, albumsRes, relatedRes] = await Promise.allSettled([
+    fetch(`https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=BR`, { headers }),
+    fetch(`https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&market=BR&limit=10`, { headers }),
+    fetch(`https://api.spotify.com/v1/artists/${artistId}/related-artists`, { headers }),
+  ]);
+
+  // Top tracks
+  let tracks = [];
+  if (tracksRes.status === 'fulfilled' && tracksRes.value.ok) {
+    const data = await tracksRes.value.json();
+    tracks = (data.tracks || []).slice(0, 5).map(t => ({
+      nome:       t.name,
+      streams:    t.popularity,
+      id:         t.id,
+      previewUrl: t.preview_url || null,
+      durationMs: t.duration_ms,
+      explicit:   t.explicit,
+      popularity: t.popularity,
+      imageUrl:   t.album?.images?.[1]?.url || t.album?.images?.[0]?.url || null,
+      albumName:  t.album?.name || '',
     }));
-  } catch { return []; }
+  }
+
+  // Audio features para as top tracks
+  let audioFeatures = {};
+  if (tracks.length) {
+    try {
+      const ids = tracks.map(t => t.id).join(',');
+      const afRes = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, { headers });
+      if (afRes.ok) {
+        const afData = await afRes.json();
+        (afData.audio_features || []).forEach(af => {
+          if (af) audioFeatures[af.id] = {
+            bpm:          Math.round(af.tempo),
+            energy:       Math.round(af.energy * 100),
+            danceability: Math.round(af.danceability * 100),
+            valence:      Math.round(af.valence * 100),
+            acousticness: Math.round(af.acousticness * 100),
+            key:          ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][af.key] || '?',
+            mode:         af.mode === 1 ? 'Maior' : 'Menor',
+          };
+        });
+      }
+    } catch { /* silencioso */ }
+  }
+
+  // Adiciona audio features nas tracks
+  tracks = tracks.map(t => ({ ...t, af: audioFeatures[t.id] || null }));
+
+  // Álbuns / Singles
+  let albums = [];
+  if (albumsRes.status === 'fulfilled' && albumsRes.value.ok) {
+    const data = await albumsRes.value.json();
+    albums = (data.items || []).map(a => ({
+      id:          a.id,
+      nome:        a.name,
+      tipo:        a.album_type, // 'album' | 'single' | 'compilation'
+      faixas:      a.total_tracks,
+      dataLanc:    a.release_date,
+      imageUrl:    a.images?.[1]?.url || a.images?.[0]?.url || null,
+      spotifyUrl:  a.external_urls?.spotify || null,
+    }));
+  }
+
+  // Artistas relacionados
+  let related = [];
+  if (relatedRes.status === 'fulfilled' && relatedRes.value.ok) {
+    const data = await relatedRes.value.json();
+    related = (data.artists || []).slice(0, 6).map(a => ({
+      nome:       a.name,
+      popularity: a.popularity,
+      generos:    (a.genres || []).slice(0, 2),
+      imageUrl:   a.images?.[2]?.url || a.images?.[1]?.url || null,
+    }));
+  }
+
+  return { tracks, albums, related };
+}
+
+/** Mantém compatibilidade — chamado em outros lugares do código */
+async function getTopTracks(artistId) {
+  const { tracks } = await fetchAllSpotifyData(artistId);
+  return tracks;
 }
 
 /**
@@ -398,6 +471,8 @@ async function preencherArtista(artist) {
 
   // Campo de nome (usado no cadastro)
   document.getElementById('f-nome').value = artist.name;
+  // Salva gêneros completos para o artista
+  window._spotifyGeneros = artist.genres || [];
 
   // Detecta nicho pelo gênero
   const genreMap = {
@@ -434,10 +509,17 @@ async function preencherArtista(artist) {
   const genreStr = genres.slice(0, 2).join(', ') || 'gênero não identificado';
   showToast(`✓ ${artist.name} · Pop: ${artist.popularity}/100 · ${genreStr}`);
 
-  // Busca top tracks silenciosamente e renderiza campos de streams
-  renderTopTracksForm([]);  // mostra skeleton enquanto carrega
-  const tracks = await getTopTracks(artist.id);
+  // Busca TODOS os dados em paralelo e renderiza
+  renderTopTracksForm([]);
+  const { tracks, albums, related } = await fetchAllSpotifyData(artist.id);
+
+  // Salva nos campos ocultos para uso no addArtist()
+  window._spotifyAlbums  = albums;
+  window._spotifyRelated = related;
+
   renderTopTracksForm(tracks);
+  renderAlbumsPreview(albums, artist);
+  renderRelatedArtists(related);
 }
 
 /**
@@ -450,36 +532,184 @@ function renderTopTracksForm(tracks) {
 
   if (!tracks.length) {
     container.innerHTML = `
-      <div style="font-size:11px;color:var(--gray2);padding:8px 0;">
-        ⟳ Buscando músicas no Spotify...
+      <div style="display:flex;flex-direction:column;gap:8px;padding:8px 0;">
+        <div class="skeleton skeleton-line" style="width:100%;height:48px;border-radius:8px;"></div>
+        <div class="skeleton skeleton-line" style="width:100%;height:48px;border-radius:8px;"></div>
+        <div class="skeleton skeleton-line" style="width:70%;height:48px;border-radius:8px;"></div>
       </div>`;
     return;
   }
 
+  const fmtDur = ms => {
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  };
+
   container.innerHTML = `
-    <div style="font-size:10px;color:var(--gray2);margin-bottom:8px;line-height:1.4;">
-      Top músicas encontradas no Spotify · <span style="color:var(--gold)">preencha os streams reais quando o artista mandar o print</span>
-    </div>
-    ${tracks.map((t, i) => `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span style="font-size:11px;color:var(--gray2);width:14px;flex-shrink:0;">${i+1}.</span>
-        <span style="font-size:12px;color:var(--white);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${t.nome}">${t.nome}</span>
-        <div style="position:relative;flex-shrink:0;">
-          <input type="number"
-            id="f-track-streams-${i}"
-            data-track-nome="${t.nome.replace(/"/g,'')}"
-            placeholder="streams reais"
-            min="0"
-            style="width:130px;padding:4px 8px;font-size:11px;font-family:var(--mono);
-                   background:var(--surface3);border:1px solid var(--border);
-                   border-radius:6px;color:var(--white);outline:none;"/>
-        </div>
-      </div>`).join('')}
-  `;
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <div class="form-section-label" style="margin-bottom:10px;">
+        Top Músicas <span class="form-section-auto">Spotify</span>
+        <span style="font-size:10px;color:var(--gold);font-weight:600;background:var(--gold-bg);border:1px solid var(--gold-dim);border-radius:20px;padding:2px 8px;">
+          preencha streams reais quando tiver o print
+        </span>
+      </div>
+      ${tracks.map((t, i) => {
+        const af = t.af;
+        return `
+        <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);
+                    padding:10px 12px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:${af ? '10px' : '0'}">
+            ${t.imageUrl ? `<img src="${t.imageUrl}" style="width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;">` :
+              `<div style="width:40px;height:40px;border-radius:4px;background:var(--surface3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;">🎵</div>`}
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                <span style="font-size:11px;color:var(--gray3);">${i+1}.</span>
+                <span style="font-size:13px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.nome}</span>
+                ${t.explicit ? '<span style="font-size:9px;color:var(--gray2);background:var(--surface3);border:1px solid var(--border2);border-radius:3px;padding:0 4px;">E</span>' : ''}
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:10px;color:var(--gray2);">${t.albumName}</span>
+                ${t.durationMs ? `<span style="font-size:10px;color:var(--gray3);font-family:var(--mono);">${fmtDur(t.durationMs)}</span>` : ''}
+                <span style="font-size:10px;color:var(--gold);font-family:var(--mono);">pop: ${t.popularity}</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              ${t.previewUrl ? `
+                <button onclick="togglePreview('prev-${i}','${t.previewUrl}')"
+                  id="prev-btn-${i}"
+                  style="width:30px;height:30px;border-radius:50%;background:var(--green);border:none;
+                         cursor:pointer;display:flex;align-items:center;justify-content:center;
+                         font-size:12px;transition:transform .15s;"
+                  title="Ouvir prévia 30s">▶</button>
+                <audio id="prev-${i}" src="${t.previewUrl}" preload="none"></audio>` : ''}
+              <input type="number"
+                id="f-track-streams-${i}"
+                data-track-nome="${t.nome.replace(/"/g,'')}"
+                data-track-id="${t.id}"
+                placeholder="streams reais"
+                min="0"
+                style="width:120px;padding:5px 8px;font-size:11px;font-family:var(--mono);
+                       background:var(--surface3);border:1px solid var(--border);
+                       border-radius:6px;color:var(--white);outline:none;transition:border-color .15s;"
+                onfocus="this.style.borderColor='var(--gold)'"
+                onblur="this.style.borderColor='var(--border)'"/>
+            </div>
+          </div>
+          ${af ? `
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-pill);color:var(--gray1);">
+              🥁 <b style="color:var(--white)">${af.bpm}</b> BPM
+            </span>
+            <span style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-pill);color:var(--gray1);">
+              ⚡ Energia <b style="color:var(--white)">${af.energy}%</b>
+            </span>
+            <span style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-pill);color:var(--gray1);">
+              💃 Dance <b style="color:var(--white)">${af.danceability}%</b>
+            </span>
+            <span style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-pill);color:var(--gray1);">
+              😊 Valência <b style="color:var(--white)">${af.valence}%</b>
+            </span>
+            <span style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-pill);color:var(--gray1);">
+              🎸 ${af.key} ${af.mode}
+            </span>
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
 }
+
+/** Alterna play/pause do preview de 30 segundos */
+window.togglePreview = function(audioId, src) {
+  // Para todos os outros players
+  document.querySelectorAll('audio').forEach(a => {
+    if (a.id !== audioId) {
+      a.pause();
+      const btn = document.getElementById(a.id.replace('prev-', 'prev-btn-'));
+      if (btn) btn.textContent = '▶';
+    }
+  });
+  const audio = document.getElementById(audioId);
+  const btn   = document.getElementById(audioId.replace('prev-', 'prev-btn-'));
+  if (!audio) return;
+  if (audio.paused) {
+    audio.play();
+    if (btn) btn.textContent = '⏸';
+    audio.onended = () => { if (btn) btn.textContent = '▶'; };
+  } else {
+    audio.pause();
+    if (btn) btn.textContent = '▶';
+  }
+};
 
 window.preencherArtista = preencherArtista;
 window._searchCache     = _searchCache;
+window._spotifyAlbums   = [];
+window._spotifyRelated  = [];
+window._spotifyGeneros  = [];
+
+/** Renderiza seção de álbuns/singles abaixo do formulário */
+function renderAlbumsPreview(albums, artist) {
+  let wrap = document.getElementById('spotify-albums-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'spotify-albums-wrap';
+    const tracksWrap = document.getElementById('f-top-tracks-wrap');
+    tracksWrap?.parentNode?.insertBefore(wrap, tracksWrap.nextSibling);
+  }
+  if (!albums.length) { wrap.innerHTML = ''; return; }
+
+  const totalAlbums  = albums.filter(a => a.tipo === 'album').length;
+  const totalSingles = albums.filter(a => a.tipo === 'single').length;
+  const latest       = albums[0];
+  const latestDate   = latest?.dataLanc ? new Date(latest.dataLanc).toLocaleDateString('pt-BR', { year:'numeric', month:'short' }) : '?';
+
+  wrap.innerHTML = `
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <div class="form-section-label" style="margin-bottom:10px;">
+        Discografia <span class="form-section-auto">${totalAlbums} álbuns · ${totalSingles} singles</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        ${albums.slice(0, 6).map(a => `
+          <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border2);
+                      border-radius:var(--r-sm);padding:6px 10px;min-width:0;flex:1;min-width:200px;max-width:calc(50% - 4px);">
+            ${a.imageUrl ? `<img src="${a.imageUrl}" style="width:36px;height:36px;border-radius:4px;object-fit:cover;flex-shrink:0;">` :
+              `<div style="width:36px;height:36px;border-radius:4px;background:var(--surface3);flex-shrink:0;display:flex;align-items:center;justify-content:center;">🎵</div>`}
+            <div style="min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.nome}</div>
+              <div style="font-size:10px;color:var(--gray2);">${a.tipo === 'album' ? '💿 Álbum' : '🎵 Single'} · ${a.dataLanc?.slice(0,4) || '?'} · ${a.faixas} faixas</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+/** Renderiza artistas relacionados */
+function renderRelatedArtists(related) {
+  let wrap = document.getElementById('spotify-related-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'spotify-related-wrap';
+    const albumsWrap = document.getElementById('spotify-albums-wrap');
+    albumsWrap?.parentNode?.insertBefore(wrap, albumsWrap?.nextSibling);
+  }
+  if (!related.length) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = `
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <div class="form-section-label" style="margin-bottom:10px;">
+        Artistas relacionados <span class="form-section-auto">Spotify</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${related.map(r => `
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;
+                      background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-pill);">
+            ${r.imageUrl ? `<img src="${r.imageUrl}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;">` : ''}
+            <span style="font-size:11px;color:var(--white);font-weight:600;">${r.nome}</span>
+            <span style="font-size:10px;color:var(--gold);font-family:var(--mono);">${r.popularity}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
 
 /** Renderiza dropdown para escolher entre múltiplos resultados. */
 function renderSearchDropdown(results) {
@@ -699,6 +929,40 @@ function openDD(id) {
       </label>`;
   }).join('');
 
+  // Bloco de álbuns
+  const albumsPopup = (a.albums && a.albums.length) ? `
+    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">
+        💿 Discografia — ${a.albums.filter(x=>x.tipo==='album').length} álbuns · ${a.albums.filter(x=>x.tipo==='single').length} singles
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${a.albums.slice(0,6).map(al => `
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${al.imageUrl ? `<img src="${al.imageUrl}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;flex-shrink:0;">` :
+              `<div style="width:32px;height:32px;border-radius:4px;background:var(--surface3);flex-shrink:0;"></div>`}
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${al.nome}</div>
+              <div style="font-size:10px;color:var(--gray2);">${al.tipo === 'album' ? '💿' : '🎵'} ${al.dataLanc?.slice(0,4)} · ${al.faixas} faixas</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // Artistas relacionados
+  const relatedPopup = (a.relatedArtists && a.relatedArtists.length) ? `
+    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">🔗 Artistas Relacionados</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;">
+        ${a.relatedArtists.map(r => `
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px;
+                      background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-pill);">
+            ${r.imageUrl ? `<img src="${r.imageUrl}" style="width:18px;height:18px;border-radius:50%;object-fit:cover;">` : ''}
+            <span style="font-size:11px;color:var(--white);">${r.nome}</span>
+            <span style="font-size:10px;color:var(--gold);font-family:var(--mono);">${r.popularity}</span>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
   // Monta bloco de top músicas para o popup
   const topTracksPopup = (a.topTracks && a.topTracks.length)
     ? `<div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;">
@@ -738,11 +1002,14 @@ function openDD(id) {
           <span style="font-size:11px;color:var(--gray2);">🎧 <b style="color:var(--white)">${fmtN(a.spotify)}</b> ouv/mês</span>
           <span style="font-size:11px;color:var(--gray2);">📊 <b style="color:var(--white)">${a.eng}%</b> eng.</span>
           ${a.tiktok ? `<span style="font-size:11px;color:var(--gray2);">🎵 <b style="color:var(--white)">${fmtN(a.tiktok)}</b> TikTok</span>` : ''}
+          ${a.popularidade ? `<span style="font-size:11px;color:var(--gray2);">⭐ Pop. <b style="color:var(--gold)">${a.popularidade}/100</b></span>` : ''}
         </div>
       </div>
       <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:${a.niche==='trap'?'rgba(201,168,76,.15)':'var(--surface2)'};color:var(--gold);border:1px solid var(--gold-dim);">${a.niche}</span>
     </div>
     ${topTracksPopup}
+    ${albumsPopup}
+    ${relatedPopup}
   `;
 
   document.getElementById('dd-title').textContent = `${a.nome}`;
@@ -1107,7 +1374,10 @@ async function addArtist() {
     popularidade: parseInt(document.getElementById('f-pop').value)    || 0,
     imageUrl:    document.getElementById('f-img-url').value           || '',
     incompleto:  !document.getElementById('f-seg').value,
-    topTracks:   lerTopTracksForm(),
+    topTracks:      lerTopTracksForm(),
+    albums:         window._spotifyAlbums  || [],
+    relatedArtists: window._spotifyRelated || [],
+    generos:        window._spotifyGeneros || [],
   };
 
   artists.push(novoArtista);
@@ -1377,6 +1647,10 @@ function buildCard(a, idx = 0) {
           ${warns.map(w => `<span class="tag-w">${w}</span>`).join('')}
           ${goods.map(g => `<span class="tag-g">${g}</span>`).join('')}
         </div>
+        ${(a.generos && a.generos.length) ? `
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
+          ${a.generos.slice(0,4).map(g => `<span style="font-size:9px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r-pill);color:var(--gray2);">${g}</span>`).join('')}
+        </div>` : ''}
         <!-- DD progress mini -->
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
           <span style="font-size:10px;color:var(--gray3);">Clique para ver detalhes + calculadora</span>
