@@ -27,7 +27,11 @@
       </div>
     </div>
     <div class="header-tag">Rio de Janeiro · 2026</div>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">⚙ Filtros</button>
   </header>
+
+  <!-- Backdrop mobile sidebar -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
 
   <!-- ═══════════════════════════════════════════════════════
@@ -301,6 +305,13 @@
         </div>
         <div class="grid-header">
           <div class="grid-count" id="grid-count"></div>
+          <select class="sort-select" id="sort-select" onchange="render()">
+            <option value="score-desc">Score ↓</option>
+            <option value="score-asc">Score ↑</option>
+            <option value="name-asc">Nome A–Z</option>
+            <option value="seg-desc">Seguidores ↓</option>
+            <option value="spotify-desc">Ouvintes ↓</option>
+          </select>
         </div>
         <div class="artist-grid" id="artist-grid"></div>
       </main>

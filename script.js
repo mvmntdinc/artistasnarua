@@ -1211,7 +1211,15 @@ function render() {
 
   document.getElementById('grid-count').innerHTML = `<b>${filtered.length}</b> artistas encontrados`;
 
-  const sorted = [...filtered].sort((a, b) => b.sc - a.sc);
+  const sortVal = document.getElementById('sort-select')?.value || 'score-desc';
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortVal === 'score-desc') return b.sc - a.sc;
+    if (sortVal === 'score-asc')  return a.sc - b.sc;
+    if (sortVal === 'name-asc')   return a.nome.localeCompare(b.nome, 'pt-BR');
+    if (sortVal === 'seg-desc')   return b.seg - a.seg;
+    if (sortVal === 'spotify-desc') return b.spotify - a.spotify;
+    return b.sc - a.sc;
+  });
   const grid   = document.getElementById('artist-grid');
 
   if (!sorted.length) {
@@ -1224,13 +1232,13 @@ function render() {
     return;
   }
 
-  grid.innerHTML = sorted.map(a => buildCard(a)).join('');
+  grid.innerHTML = sorted.map((a, i) => buildCard(a, i)).join('');
 }
 
 
 /* -- BUILD CARD ----------------------------------------------- */
 
-function buildCard(a) {
+function buildCard(a, idx = 0) {
   const t       = a.tier;
   const bc      = barColor(t);
   const pillCls = t === 'ideal' ? 'sp-ideal' : t === 'ok' ? 'sp-ok' : 'sp-fraco';
@@ -1305,7 +1313,7 @@ function buildCard(a) {
     : '';
 
   return `
-    <div class="acard ${t}" onclick="openDD(${a.id})" style="cursor:pointer;" title="Clique para ver detalhes">
+    <div class="acard ${t}" onclick="openDD(${a.id})" style="cursor:pointer;--card-i:${idx}" title="Clique para ver detalhes">
       <div class="acard-top ${a.imageUrl ? 'acard-top--photo' : ''}" style="${bannerStyle}">
         ${bannerOverlay}
         ${a.imageUrl ? `
@@ -1413,6 +1421,14 @@ window.closeDD       = closeDD;
 window.updateDD      = updateDD;
 window.toggleDD      = toggleDD;
 window.render        = render;
+
+window.toggleSidebar = function() {
+  const sidebar   = document.querySelector('.sidebar');
+  const backdrop  = document.getElementById('sidebar-backdrop');
+  const isOpen    = sidebar.classList.toggle('open');
+  backdrop.classList.toggle('open', isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+};
 
 
 /* -- ENRICH: busca fotos do Spotify para artistas sem imageUrl -- */
